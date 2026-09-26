@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+# スキルの出力先。リポジトリの中で試したときに、実サイトのデータを公開しないため
+seo/
+tests/audit/out/
+tests/gsc/data/
+tests/gsc/results_*.json

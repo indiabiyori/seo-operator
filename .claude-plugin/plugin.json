@@ -1,0 +1,12 @@
+{
+  "name": "seo-operator",
+  "description": "日本語サイト向けの SEO スキル。手元にないデータは推測で埋めず、どのツールから何を取ってくるかを指示する",
+  "version": "1.0.0",
+  "author": {
+    "name": "indiabiyori"
+  },
+  "homepage": "https://github.com/indiabiyori/seo-operator",
+  "repository": "https://github.com/indiabiyori/seo-operator",
+  "license": "MIT",
+  "keywords": ["seo", "japanese", "search-console", "google-trends", "agent-skills"]
+}

@@ -1,0 +1,34 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 は macOS に標準で入っている版。3.13 は pandas 3 系で確かめる
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: 仮想環境を作り、requirements.txt のパッケージを入れる
+        run: |
+          uv venv --python ${{ matrix.python }} .venv
+          uv pip install --python .venv/bin/python -r skills/seo-operator/requirements.txt
+      - name: スモークテスト（GSC 系）
+        run: .venv/bin/python tests/smoke/check_gsc.py
+      - name: パッケージがない環境での挙動
+        run: .venv/bin/python tests/smoke/check_nodeps.py
+      - name: GSC 系3本の全テスト
+        run: .venv/bin/python tests/gsc/run_tests.py
+      - name: audit.py の全テスト
+        run: .venv/bin/python tests/audit/verify_audit.py

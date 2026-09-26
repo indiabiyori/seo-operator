@@ -1,0 +1,14 @@
+{
+  "name": "seo-operator",
+  "description": "日本語サイト向けの SEO スキル seo-operator を配布するマーケットプレイス",
+  "owner": {
+    "name": "indiabiyori"
+  },
+  "plugins": [
+    {
+      "name": "seo-operator",
+      "source": "./",
+      "description": "日本語サイト向けの SEO スキル（キーワード調査、技術監査、Search Console の分析、記事のリライト、AI 検索への対応）"
+    }
+  ]
+}

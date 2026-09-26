@@ -1,0 +1,6 @@
+# seo-operator のスクリプトが使うパッケージ（Python 3.9 以上）
+# 仮想環境を作って有効にしてから: pip install -r requirements.txt
+# uv があれば、スクリプトを uv run で実行するだけで自動で入る（各スクリプトの先頭の宣言を使う）
+requests>=2.32
+beautifulsoup4>=4.15
+pandas>=2.3
