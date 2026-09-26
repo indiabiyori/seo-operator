@@ -203,8 +203,8 @@ def case_main(py, srv):
         (b + "/p/not-found", E("404")),
         (b + "/p/server-error", E("500")),
         (b + "/p/slow", E("ERROR:Timeout")),
-        ("http://127.0.0.1:{}/p/refused".format(srv.closed_port), E("ERROR:ConnectionError")),
-        ("https://127.0.0.1:{}/p/ssl".format(srv.ssl_port), E("ERROR:SSLError")),
+        ("http://127.0.0.1:{}/p/refused".format(srv.closed_port), E("BLOCKED:robots-unreachable")),
+        ("https://127.0.0.1:{}/p/ssl".format(srv.ssl_port), E("BLOCKED:robots-unreachable")),
         (b + "/p/sjis", P("シフトJISのページ①髙", 12, wc=6, desc="機種依存文字①と髙を含む説明", desc_len=14)),
         (b + "/p/eucjp", P("EUC-JPのページ①", 11, wc=7, desc="日本語EUCの説明", desc_len=9)),
         (b + "/p/english", P("English Page", 12, wc=14, desc="An English description.", desc_len=23)),
@@ -225,8 +225,8 @@ def case_main(py, srv):
                    "[1/34] 200 " + b + "/p/ja-normal", "[17/34] 301>200 " + b + "/redirect/301",
                    "=== サマリー ===", "noindex: 3 件", "canonical 不一致: 2 件", "title なし（空を含む）: 1 件",
                    "meta description なし（空を含む）: 1 件", "h1 が1個でないページ: 1 件（0個: 0 / 2個以上: 1）",
-                   "エラー: 4 件", "robots.txt で除外: 2 件", "word_count の単位: 文字数 23 件 / 単語数 2 件",
-                   "HTML を解析したページ: 25 件", "  BLOCKED:robots.txt: 2",
+                   "エラー: 2 件", "robots.txt で除外: 2 件", "robots.txt を取得できずに除外: 2 件", "word_count の単位: 文字数 23 件 / 単語数 2 件",
+                   "HTML を解析したページ: 25 件", "  BLOCKED:robots.txt: 2", "  BLOCKED:robots-unreachable: 2",
                    "HTML 以外（HTTP ヘッダーの canonical と X-Robots-Tag だけを記録）: 1 件",
                    # 2026-09-26 追加: sitemap_index.xml → nested_index.xml は入れ子のインデックス
                    "警告: サイトマップインデックスが別のサイトマップインデックスを参照しています（入れ子）: "
@@ -385,7 +385,7 @@ def case_help(py, srv):
                    "CSV インジェクション対策を無効にする", "url, redirect_to, title, desc, canonical",
                    "title_len / desc_len は元の文字数", "先頭の ' を除くか",
                    "入れ子の）場合は、たどったうえで警告を出し", "Google は入れ子のインデックスをサポートせず",
-                   "5xx・429・タイムアウト・接続エラーのときも全許可として", "h1_count が空欄でない行に絞る",
+                   "5xx・タイムアウト・接続エラーのときは RFC 9309 に従い", "429 のときは Google の仕様に合わせて", "h1_count が空欄でない行に絞る",
                    "Googlebot 向けのグループは使わない", "サイトマップに載っていないページは見つけられない",
                    "[--user-agent UA] [--ignore-robots] [--allow-private] [--allow-other-hosts]",
                    "[--count-mode {auto,chars,words}]",
@@ -393,8 +393,7 @@ def case_help(py, srv):
                    "デフォルト: " + DEFAULT_UA, "JavaScript を実行しない", "「公開 URL をテスト」→「テスト済みのページを表示」",
                    "Googlebot を詐称しない", "使用例:", "python3 audit.py https://example.com/sitemap.xml",
                    "RSS 2.0 / Atom", "HTML でない 2xx（PDF など）は、Link ヘッダーの canonical",
-                   "RFC 9309", "最初の 12 時間はサイトのクロールを止め", "その後 30 日間は最後に",
-                   "利用できない状態が続いていれば", "30 日を過ぎてもエラーが",
+                   "RFC 9309", "最初の 12 時間はサイトのクロールを止め", "BLOCKED:robots-unreachable",
                    "--allow-private", "BLOCKED:private-address", "社内ネットワークのステージング環境",
                    "IPv4 射影の IPv6", "--allow-other-hosts", "SKIPPED:other-host", "リダイレクト後を含む",
                    "最初の有効な loc のホスト", "Retry-After", "上限 120 秒", "上限 60 秒", "5 回続いたら",
@@ -407,7 +406,7 @@ def case_help(py, srv):
     for needle in ["JavaScript を実行しない", "Googlebot を詐称しない", "ログインが必要なページは取得できない",
                    "hreflang、構造化データ、内部リンク", "自社サイトか、許可を得たサイト", "--delay",
                    "RFC 9309 と Google の robots.txt の仕様", "最長一致", "* と $ のワイルドカード",
-                   "最初の 12 時間は", "30 日を過ぎてもエラーが続くと", "RSS 2.0 / Atom",
+                   "最初の 12 時間は", "--ignore-robots で続けられる", "BLOCKED:robots-unreachable", "RSS 2.0 / Atom",
                    "HTML でない 2xx のレスポンス（PDF など）は、canonical（Link ヘッダー）",
                    "BLOCKED:private-address", "SKIPPED:other-host", "--allow-private", "--allow-other-hosts",
                    "IPv4 射影の IPv6", "DNS リバインディング", "Retry-After", "上限 120 秒", "上限 60 秒",
@@ -1044,7 +1043,7 @@ def case_http_attack(py, srv):
     compare_rows(rows, [
         (b + "/r/cross-host", P("English Page", 12, wc=14, desc="An English description.", desc_len=23,
                                 status="301>200", redirect_to=loc + "/p/english")),
-        (b + "/r/to-https", E("ERROR:SSLError")),
+        (b + "/r/to-https", E("BLOCKED:robots-unreachable", redirect_to="https://127.0.0.1:{}/p/x".format(srv.ssl_port))),
         (b + "/r/a/b/rel", P("English Page", 12, wc=14, desc="An English description.", desc_len=23,
                              status="302>200", redirect_to=b + "/p/english")),
         (b + "/r/no-location", E("301")),
@@ -1070,7 +1069,7 @@ def case_http_attack(py, srv):
     record("HTTP の攻撃（ホストをまたぐリダイレクト・http→https・相対 Location・Location なし / 空・mailto:）", f,
            "7 行一致。http://127.0.0.1 → http://localhost と http://127.0.0.1 → https://localhost（自己署名証明書の"
            "本物の TLS）の両方で、リダイレクト先のホストの robots.txt をホストごとに1回だけ取得して判定。"
-           "偽 TLS への移動は ERROR:SSLError と robots.txt の警告")
+           "偽 TLS への移動は、移動先の robots.txt を取得できないため BLOCKED:robots-unreachable と警告")
 
 
 def case_robots_integration(py, srv):
@@ -1117,14 +1116,16 @@ def requests_quote(path):
 def case_robots_status(py, srv):
     b = srv.base
     f = []
-    temp = "最初の 12 時間はサイトのクロールを止め"
+    deny = "--ignore-robots を付けて実行し直して"
+    both = ["/p/english", "/p/two-h1"]
+    unreachable = {"500", "503", "429", "slow"}  # 5xx・タイムアウトは RFC 9309、429 は Google の仕様に合わせて全拒否
     modes = [
         ("404", [], "robots.txt がありません（ステータス 404）", None),
         ("403", [], "robots.txt がありません（ステータス 403）", None),
-        ("500", [], "警告: robots.txt を取得できませんでした（ステータス 500）", temp),
-        ("503", [], "警告: robots.txt を取得できませんでした（ステータス 503）", temp),
-        ("429", [], "警告: robots.txt を取得できませんでした（ステータス 429）", temp),
-        ("slow", [], "警告: robots.txt を取得できませんでした（ERROR:Timeout）", temp),
+        ("500", both, "警告: robots.txt を取得できませんでした（ステータス 500）", deny),
+        ("503", both, "警告: robots.txt を取得できませんでした（ステータス 503）", deny),
+        ("429", both, "警告: robots.txt を取得できませんでした（ステータス 429）", deny),
+        ("slow", both, "警告: robots.txt を取得できませんでした（ERROR:Timeout）", deny),
         ("redirect", ["/p/english"], "User-agent: * のグループを適用、ルール 1 件", None),
         ("loop", [], "robots.txt のリダイレクトが多すぎます", None),
         ("html", [], "該当するグループなし、ルール 0 件", None),
@@ -1142,11 +1143,12 @@ def case_robots_status(py, srv):
             no_traceback(proc, f, mode + ": ")
             _, _, rows, _ = read_csv(out)
             got = {r["url"][len(loc):]: r["status"] for r in rows}
-            for p in ["/p/english", "/p/two-h1"]:
-                exp = "BLOCKED:robots.txt" if p in blocked else "200"
+            for p in both:
+                blocked_status = "BLOCKED:robots-unreachable" if mode in unreachable else "BLOCKED:robots.txt"
+                exp = blocked_status if p in blocked else "200"
                 if got.get(p) != exp:
                     f.append("{}: {} status={}（期待 {}）".format(mode, p, got.get(p), exp))
-            for nd in [needle, needle2]:
+            for nd in [needle, needle2] + (["robots.txt を取得できずに除外: 2 件"] if mode in unreachable else []):
                 if nd and nd not in proc.stderr:
                     f.append("{}: stderr に {!r} がない".format(mode, nd))
             if proc.returncode != 0:
@@ -1154,7 +1156,7 @@ def case_robots_status(py, srv):
     finally:
         set_robots_mode(srv, "complex")
     record("robots.txt の取得結果（4xx・5xx・429・タイムアウト・リダイレクト・ループ・HTML・BOM と CR・500 KiB 超）", f,
-           "4xx は全許可、5xx・429・タイムアウトは全許可＋Google の扱い（最初の 12 時間はクロール停止、その後 30 日間は最後の robots.txt）を警告、リダイレクト先の内容を適用、"
+           "4xx は全許可、5xx・タイムアウトは RFC 9309、429 は Google の仕様に合わせて全拒否（BLOCKED:robots-unreachable）し --ignore-robots を案内、リダイレクト先の内容を適用、"
            "ループは 4xx 扱い、BOM と CR 改行を解釈、500 KiB より後の行と境目で切れた行は無視")
 
 

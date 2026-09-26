@@ -47,7 +47,8 @@ audit.py - サイトマップの URL を1件ずつ取得し、ページごとの
     status              各段のステータスコードを ">" でつないだもの（例: 200 / 301>200 / 302>301>404）。
                         例外時は ERROR:Timeout / ERROR:ConnectionError / ERROR:SSLError /
                         ERROR:TooManyRedirects / ERROR:<例外クラス名>。
-                        robots.txt で除外した URL は BLOCKED:robots.txt、内部アドレスに解決されるため
+                        robots.txt で除外した URL は BLOCKED:robots.txt、robots.txt を取得できずに
+                        除外した URL は BLOCKED:robots-unreachable、内部アドレスに解決されるため
                         取得しなかった URL は BLOCKED:private-address、サイトマップと別のホストのため
                         取得しなかった URL は SKIPPED:other-host、URL（loc かリダイレクト先）に認証情報
                         （userinfo）が含まれるため取得しなかった URL は SKIPPED:credentials-in-url。
@@ -141,15 +142,14 @@ audit.py - サイトマップの URL を1件ずつ取得し、ページごとの
     日本語のままの表記と %XX の表記の違いをそろえてから照合する。robots.txt は先頭の 500 KiB だけを読む
     （Google と同じ。境目で切れた行は捨てる）。
   - robots.txt が 4xx（429 を除く）なら全許可として扱う（Google も robots.txt がないものとして扱う）。
-    5xx・429・タイムアウト・接続エラーのときも全許可として続行するが、標準エラーに警告を出す。
-    Google の robots.txt の仕様では、サーバーエラー（5xx。タイムアウトなどのネットワークエラーも含む。
-    429 も Google の HTTP ステータスコードの説明ではサーバーエラーとされている）のとき、最初の 12 時間は
-    サイトのクロールを止めて robots.txt の取得を試み続け、取得できなければその後の 30 日間は最後に取得できた
-    robots.txt を使う（それもなければ制限なしとみなす）。30 日を過ぎてもエラーが続くと、サイトが全体として
-    利用できる状態なら robots.txt がないものとして扱い、利用できない状態が続いていればクロールを止める
-    （どちらの場合も robots.txt の取得は続ける）。そのため結果は、この間の Google のクロールと一致しない。
+    5xx・タイムアウト・接続エラーのときは RFC 9309 に従い、429 のときは Google の仕様に合わせて、全拒否として扱う。
+    その robots.txt が対象とする URL（スキーム・ホスト・ポートが同じもの）は取得せずに BLOCKED:robots-unreachable
+    とする（標準エラーに警告を出す）。Google も、robots.txt がこれらのエラーを返しているあいだは、
+    最初の 12 時間はサイトのクロールを止める。自社サイトの監査で robots.txt が一時的に取れないだけなら、
+    --ignore-robots で続けられる。
   - リダイレクトは最大10回までたどる（Google のクローラーのデフォルトの上限に合わせた）。
-    リダイレクト先が robots.txt で除外されていれば、そこで止めて BLOCKED:robots.txt とする。
+    リダイレクト先が robots.txt で除外されていれば、そこで止めて BLOCKED:robots.txt とする
+    （リダイレクト先の robots.txt を取得できなければ BLOCKED:robots-unreachable）。
   - canonical は <head> 側の link 要素だけを採用する。<body> 内のものと、<head> 内でも
     <head> に置けない要素（img・iframe・div など）より後にあるものは無視して、標準エラーに注意を出す
     （Google は <head> 内の rel="canonical" だけを受け付け、<head> に置けない要素を見つけると
@@ -240,6 +240,7 @@ REDIRECT_CODES = (301, 302, 303, 307, 308)
 STATUS_PRIVATE = "BLOCKED:private-address"
 STATUS_OTHER_HOST = "SKIPPED:other-host"
 STATUS_CREDENTIALS = "SKIPPED:credentials-in-url"
+STATUS_ROBOTS_UNREACHABLE = "BLOCKED:robots-unreachable"  # robots.txt を取得できず、全拒否として除外した
 # 出力の前に userinfo を伏せる列（CSV インジェクション対策より先に当てる）
 URL_COLUMNS = ("url", "redirect_to", "canonical")
 THROTTLE_CODES = (429, 503)
@@ -992,10 +993,11 @@ def _agent_matches(value, token):
 class RobotsRules(object):
     """あるクローラーに適用するルール。長いパターンから順に並べ、同じ長さなら Allow を先にする。"""
 
-    def __init__(self, rules, label):
-        # type: (List[Tuple[str, bool]], str) -> None
+    def __init__(self, rules, label, blocked_status="BLOCKED:robots.txt"):
+        # type: (List[Tuple[str, bool]], str, str) -> None
         self.rules = sorted(rules, key=lambda rule: (-len(rule[0]), not rule[1]))
         self.label = label
+        self.blocked_status = blocked_status  # 除外した URL に付けるステータス
 
     def allowed_path(self, path):
         # type: (str) -> bool
@@ -1069,6 +1071,14 @@ class RobotsCache(object):
         except Exception:
             return True
 
+    def blocked_status(self, url):
+        # type: (str) -> Optional[str]
+        """url を robots.txt の判定で取得しないときのステータス。取得してよければ None。"""
+        if self.allowed(url):
+            return None
+        rules = self._cache.get(origin_key(url))
+        return rules.blocked_status if rules is not None else "BLOCKED:robots.txt"
+
     def _load(self, url):
         # type: (str) -> RobotsRules
         parts = urlsplit(url)
@@ -1090,14 +1100,16 @@ class RobotsCache(object):
                 "全許可として扱います: {}".format(robots_url))
             return allow_all
         if res.error or code >= 500 or code == 429:
+            # 5xx とネットワークエラーは RFC 9309 2.3.1.4 に従って全拒否。429 は RFC では 4xx（取得してよい）だが、
+            # Google はサーバーエラーとして扱うため、それに合わせて全拒否にする
             reason = res.error or "ステータス {}".format(res.status_text())
-            log("  警告: robots.txt を取得できませんでした（{}）。全許可として続行します: {}\n"
-                "    Google はサーバーエラー（5xx。429 とタイムアウトなどのネットワークエラーを含む）のとき、"
-                "最初の 12 時間はサイトのクロールを止め、その後 30 日間は最後に取得できた robots.txt を使います"
-                "（なければ制限なしとみなす）。30 日を過ぎてもエラーが続くと、サイトが利用できる状態なら "
-                "robots.txt がないものとして扱い、利用できない状態が続いていればクロールを止めます。この結果は、"
-                "その間の Google のクロールと一致しません。".format(reason, robots_url))
-            return allow_all
+            log("  警告: robots.txt を取得できませんでした（{}）。全拒否として扱い、この robots.txt が対象とする URL"
+                "（スキーム・ホスト・ポートが同じもの）は取得せずに {} とします: {}\n"
+                "    5xx とネットワークエラーは RFC 9309 に、429 は Google の仕様に合わせた扱いです。Google も、"
+                "robots.txt がこれらのエラーを返しているあいだは、最初の 12 時間はサイトのクロールを止めます。"
+                "自社サイトの監査を続けるなら、--ignore-robots を付けて実行し直してください。".format(
+                    reason, STATUS_ROBOTS_UNREACHABLE, robots_url))
+            return RobotsRules([("/", False)], "全拒否（robots.txt を取得できないため）", STATUS_ROBOTS_UNREACHABLE)
         if 200 <= code < 300 and res.content is not None:
             text = res.content.decode("utf-8", errors="replace").lstrip("\ufeff")
             if res.truncated:  # 途中で切れた最後の行は、短くなったパスが広すぎるルールになるので捨てる
@@ -2009,8 +2021,9 @@ def audit_page(url, fetcher, robots, count_mode, scope=None):
         notes.append("ホストが内部アドレス（{}）に解決されるため取得しませんでした（--allow-private で許可）".format(
             address))
         return row, info
-    if robots is not None and not robots.allowed(url):
-        row["status"] = "BLOCKED:robots.txt"
+    blocked = robots.blocked_status(url) if robots is not None else None
+    if blocked:
+        row["status"] = blocked
         return row, info
 
     def want_body(resp):
@@ -2041,8 +2054,13 @@ def audit_page(url, fetcher, robots, count_mode, scope=None):
         return row, info
     if res.blocked_url:
         row["redirect_to"] = res.blocked_url
-        notes.append("リダイレクト先が robots.txt で除外されているため取得しませんでした: {}".format(
-            res.blocked_url))
+        if robots is not None and robots.blocked_status(res.blocked_url) == STATUS_ROBOTS_UNREACHABLE:
+            row["status"] = STATUS_ROBOTS_UNREACHABLE
+            notes.append("リダイレクト先の robots.txt を取得できないため取得しませんでした: {}".format(
+                res.blocked_url))
+        else:
+            notes.append("リダイレクト先が robots.txt で除外されているため取得しませんでした: {}".format(
+                res.blocked_url))
         return row, info
     if res.redirected:
         row["redirect_to"] = res.final_url
@@ -2093,6 +2111,7 @@ class Stats(object):
         self.h1_multi = 0
         self.errors = 0
         self.blocked = 0      # robots.txt で除外
+        self.robots_unreachable = 0  # robots.txt を取得できず、全拒否として除外
         self.private = 0      # 内部アドレスのため取得しなかった
         self.other_host = 0   # サイトマップと別のホストのため取得しなかった
         self.credentials = 0  # URL（loc かリダイレクト先）に userinfo があるため取得しなかった
@@ -2108,6 +2127,8 @@ class Stats(object):
             self.errors += 1
         if status == "BLOCKED:robots.txt":
             self.blocked += 1
+        elif status == STATUS_ROBOTS_UNREACHABLE:
+            self.robots_unreachable += 1
         elif status == STATUS_PRIVATE:
             self.private += 1
         elif status == STATUS_OTHER_HOST:
@@ -2163,6 +2184,7 @@ def print_summary(stats, total, fetcher, collector, output, elapsed, state, sani
         stats.h1_zero + stats.h1_multi, stats.h1_zero, stats.h1_multi))
     log("エラー: {} 件".format(stats.errors))
     log("robots.txt で除外: {} 件".format(stats.blocked))
+    log("robots.txt を取得できずに除外: {} 件".format(stats.robots_unreachable))
     if fetcher.guard is not None:
         log("内部アドレスのため取得しなかった（{}）: ページ {} 件 / サイトマップ {} 件".format(
             STATUS_PRIVATE, stats.private, collector.private))
@@ -2253,7 +2275,7 @@ EPILOG = """\
   url, status, redirect_to, title, title_len, desc, desc_len, h1_count,
   canonical, canonical_mismatch, robots_noindex, word_count
   status の例: 200 / 301>200 / 302>301>404 / ERROR:Timeout / BLOCKED:robots.txt /
-  BLOCKED:private-address / SKIPPED:other-host / SKIPPED:credentials-in-url
+  BLOCKED:robots-unreachable / BLOCKED:private-address / SKIPPED:other-host / SKIPPED:credentials-in-url
 
 注意:
   - JavaScript を実行しない（描画しない）。HTML の初期レスポンスだけを見るため、
@@ -2294,11 +2316,11 @@ EPILOG = """\
   - robots.txt は RFC 9309 / Google の仕様どおりに判定する（--user-agent の先頭のプロダクト
     トークンのグループ、なければ User-agent: *。最長一致、同じ長さなら Allow、* と $ に対応）。
     Googlebot 向けのグループは使わないので、Google の判定と違うことがある。
-    robots.txt が 4xx（429 を除く）なら全許可。5xx・429・タイムアウト・接続エラーのときも全許可として
-    続行し、警告を出す。Google はこれらをサーバーエラーとして扱い、最初の 12 時間はサイトのクロールを止め、
-    その後 30 日間は最後に取得できた robots.txt を使う（なければ制限なし）。30 日を過ぎてもエラーが
-    続くと、サイトが利用できる状態なら robots.txt がないものとして扱い、利用できない状態が続いていれば
-    クロールを止める。
+    robots.txt が 4xx（429 を除く）なら全許可。
+    5xx・タイムアウト・接続エラーのときは RFC 9309 に従い、429 のときは Google の仕様に合わせて、全拒否として扱う。
+    その robots.txt が対象とする URL（スキーム・ホスト・ポートが同じもの）は取得せずに BLOCKED:robots-unreachable
+    とする（警告を出す）。Google もこれらのエラーのあいだは、最初の 12 時間はサイトのクロールを止める。
+    自社サイトの監査を続けるなら --ignore-robots を付ける。
   - サイトマップインデックスが別のインデックスを参照している（入れ子の）場合は、たどったうえで警告を出し、
     件数をサマリーに出す（Google は入れ子のインデックスをサポートせず、Search Console でエラーになる）。
   - CSV インジェクション対策: url・redirect_to・title・desc・canonical で先頭が = + - @（またはタブ・CR）の

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:  # 手動でも実行できるようにする（ランナーの OS が変わったときの確認など）
 
 permissions:
   contents: read

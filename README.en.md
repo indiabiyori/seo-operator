@@ -54,7 +54,7 @@ Create one working folder per site, open Claude Code there, and ask for the init
 
 ## Using audit.py safely
 
-Use `audit.py` only on your own sites or sites you have permission to crawl. By default it waits one second between requests and follows robots.txt. It never connects to private or internal IP addresses (redirects included) and skips sitemap entries on hosts other than the sitemap's own; redirects to other public hosts are followed. If robots.txt cannot be fetched because of a server error or timeout, it prints a warning and fetches all pages.
+Use `audit.py` only on your own sites or sites you have permission to crawl. By default it waits one second between requests and follows robots.txt. It never connects to private or internal IP addresses (redirects included) and skips sitemap entries on hosts other than the sitemap's own; redirects to other public hosts are followed. If robots.txt cannot be fetched because of a server error or a network error (as RFC 9309 requires), or it returns 429 (as Google treats it), the script skips every URL that robots.txt covers and marks it `BLOCKED:robots-unreachable`. On your own site, add `--ignore-robots` to continue.
 
 ## Tests
 
@@ -70,4 +70,4 @@ All 200 regression tests passed on macOS with Python 3.9 + pandas 2.3 and Python
 
 MIT (see [LICENSE](LICENSE)). Parts of the playbooks in `skills/seo-operator/references/` summarize and adapt [Google Search Central documentation](https://developers.google.com/search/docs), which Google publishes under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with code samples under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
-Version 1.0.0 (last updated 2026-09-26).
+Version 1.1.0 (last updated 2026-09-26).
