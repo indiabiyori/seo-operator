@@ -141,6 +141,7 @@ graders:
       These count as PASS:
       - No mention of setup.
       - An optional offer for later, for example 「今後、記事や集客まで進めるときは事業内容を1枚にまとめておくと優先度を正確に決められます。今回の修正には必要ありません」.
+      - A closing offer that names the site brief file and what it would settle, and leaves the choice to the user, for example 「「主なお問い合わせの経路」と「特に力を入れたい工事」を `seo/site-brief.md` にまとめておけば、次回から優先度を確定できます。必要でしたら、質問しながら一緒に作ります」. Offering to create the file if the user wants is not item c.
       - Saying the order is provisional until the CV definition is known, including a placeholder, for example 「[要追加: CVの定義と、問い合わせの多いサービス] がわかれば順番を確定します」 or 「CV の定義がそろえば順番を確定できます」.
       - One or two short questions to refine the priorities.
       - Requests for technical data (Search Console reports, crawl messages, robots.txt), even as several [要追加: …] placeholders. These are not questions about the business.

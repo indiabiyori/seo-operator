@@ -3,7 +3,7 @@
 # /// script
 # requires-python = ">=3.9"
 # dependencies = [
-#     "pandas>=2.3",
+#     "pandas>=2.3,<4",
 # ]
 # ///
 """

@@ -11,20 +11,27 @@ permissions:
 
 jobs:
   test:
-    name: Python ${{ matrix.python }}
+    name: Python ${{ matrix.python }}（依存は ${{ matrix.deps }}）
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         # 3.9 は macOS に標準で入っている版。3.13 は pandas 3 系で確かめる
         python: ["3.9", "3.13"]
+        # highest は入れられる最新の版、lowest-direct は requirements.txt の下限の版
+        deps: ["highest"]
+        include:
+          - python: "3.9"
+            deps: "lowest-direct"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
       - name: 仮想環境を作り、requirements.txt のパッケージを入れる
         run: |
           uv venv --python ${{ matrix.python }} .venv
-          uv pip install --python .venv/bin/python -r skills/seo-operator/requirements.txt
+          uv pip install --python .venv/bin/python --resolution ${{ matrix.deps }} -r skills/seo-operator/requirements.txt
+      - name: リポジトリの整合（manifest・版・依存の範囲・相対リンク）
+        run: .venv/bin/python tests/meta/check_repo.py
       - name: スモークテスト（GSC 系）
         run: .venv/bin/python tests/smoke/check_gsc.py
       - name: パッケージがない環境での挙動

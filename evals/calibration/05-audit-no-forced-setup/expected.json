@@ -82,5 +82,13 @@
   "fix-order": "PASS",
   "no-forced-setup": "PASS",
   "setup-not-pushed": "PASS"
+ },
+ "v120_with_run1": {
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "v120_with_run3": {
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
  }
 }

@@ -2,8 +2,8 @@
 # /// script
 # requires-python = ">=3.9"
 # dependencies = [
-#     "requests>=2.32",
-#     "beautifulsoup4>=4.15",
+#     "requests>=2.32,<3",
+#     "beautifulsoup4>=4.15,<5",
 # ]
 # ///
 """

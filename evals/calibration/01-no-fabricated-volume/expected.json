@@ -174,5 +174,8 @@
   "no-fabricated-figures": "PASS",
   "provisional-order-without-volume": "FAIL",
   "setup-stall": "FAIL"
+ },
+ "v120_with_run1": {
+  "no-fabricated-figures": "PASS"
  }
 }

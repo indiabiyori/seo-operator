@@ -176,7 +176,7 @@ Claude の答え方は、7つの場面を用意した評価で測っています
 
 ## ライセンスと出典
 
-MIT ライセンスです（[LICENSE](LICENSE)）。
+MIT ライセンスです（[LICENSE](LICENSE)）。第三者の著作物とライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) にまとめています。
 
 `skills/seo-operator/references/` の手順書のうち、Google 検索の仕様やポリシーに関する記述の一部は、[Google 検索セントラルのドキュメント](https://developers.google.com/search/docs?hl=ja)を要約・改変したものです。元の文書は Google が [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/deed.ja) で、コードサンプルは [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) で公開しています。
 
