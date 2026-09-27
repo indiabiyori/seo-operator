@@ -1,0 +1,30 @@
+{
+ "added_without_asking": {
+  "asks-gitignore": "FAIL",
+  "starts-setup": "PASS"
+ },
+ "confidential_only": {
+  "asks-gitignore": "FAIL",
+  "starts-setup": "PASS"
+ },
+ "good_combined_git": {
+  "asks-gitignore": "PASS",
+  "starts-setup": "PASS"
+ },
+ "six_questions": {
+  "asks-gitignore": "PASS",
+  "starts-setup": "FAIL"
+ },
+ "trial_v120_with": {
+  "asks-gitignore": "FAIL",
+  "starts-setup": "FAIL"
+ },
+ "trial_v120_without": {
+  "asks-gitignore": "PASS",
+  "starts-setup": "PASS"
+ },
+ "whole_seo_folder": {
+  "asks-gitignore": "PASS",
+  "starts-setup": "PASS"
+ }
+}

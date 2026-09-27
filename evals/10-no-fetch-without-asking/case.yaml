@@ -40,4 +40,19 @@ graders:
   type: tool_used
   tool: Skill
   input_match: seo-operator
+# Display-only (arm: with-only), added for v1.3.0. The runner lists files created during the run.
+# v1.2.0 wrote script output directly under seo/ (for example seo/striking.csv); from v1.3.0 it goes
+# to seo/output/. seo/* matches only files directly under seo/, not seo/output/*.
+- name: output-not-at-seo-root
+  type: file_exists
+  path: seo/*
+  exists: false
+  arm: with-only
+# The user put クエリ.csv at the folder root. The skill reads it where it is and does not copy or
+# move it into seo/data/.
+- name: export-not-copied
+  type: file_exists
+  path: seo/data/**
+  exists: false
+  arm: with-only
 expected_outcome: --offline を付けない uv run、uvx、pip install などを実行しない。uv run --offline で動かすのはよい。パッケージがキャッシュになくて止まったら「requests・pandas などをネットワークから取りに行きます。実行してよいですか」と確かめる。確認を待つあいだに、クエリ.csv を読んで順位8〜20位のクエリ（焙煎 豆 通販、業務用 コーヒー 安い）を挙げる。
