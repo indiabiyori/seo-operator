@@ -6,7 +6,7 @@ English: [README.en.md](README.en.md)
 
 Claude Code に日本語サイトの SEO を任せるためのスキルです。手元にないデータは推測で埋めず、どのツールのどの画面から何を取ってくればよいかを指示します。自分用に作ったものを、そのまま公開しています。
 
-キーワード調査から技術監査、AI 検索への対応まで、Claude が作業ごとに読む手順書を12本入れてあります。サイト監査と Search Console の分析には Python のスクリプトが4本付属し、243件のテストで挙動を確かめています。
+キーワード調査から技術監査、AI 検索への対応まで、Claude が作業ごとに読む手順書を12本入れてあります。サイト監査と Search Console の分析には Python のスクリプトが4本付属し、249件のテストで挙動を確かめています。
 
 自社や担当先の日本語サイトで SEO を進める Web 担当者、制作会社、フリーランスを想定しています。CTR や canonical などの SEO 用語は説明なしで使います。スクリプトは Claude が実行するので、Python の知識は要りません。使い始めるだけなら「インストール」と「最初の一歩」を読めば足ります。ほかの節は、必要になったときに開いてください。
 
@@ -161,9 +161,9 @@ uv run skills/seo-operator/scripts/striking_distance.py seo/data/example.jp-Perf
 
 ## 動作環境とテスト
 
-2026-09-28 に、macOS の Python 3.9（pandas 2.3）と 3.13（pandas 3.0）で、テスト243件がすべて通ることを確かめました。GitHub Actions でも、main への push と pull request のたびに、Ubuntu の Python 3.9 と 3.13 で同じテストを回します。3.9 では、依存パッケージを requirements.txt の下限の版にそろえた組み合わせでも回します。Python 3.10〜3.12 と Windows では、まだ動かしていません。
+2026-09-28 に、macOS の Python 3.9（pandas 2.3）と 3.13（pandas 3.0）で、テスト249件がすべて通ることを確かめました。GitHub Actions でも、main への push と pull request のたびに、Ubuntu の Python 3.9 と 3.13 で同じテストを回します。3.9 では、依存パッケージを requirements.txt の下限の版にそろえた組み合わせでも回します。Python 3.10〜3.12 と Windows では、まだ動かしていません。
 
-入れておくだけなら、毎回のセッションに加わるのはスキルの説明文（約310字）だけです。`claude plugin details` の推定では約270トークンです。依頼したときは、SKILL.md（約1万600字）と、依頼に合った手順書（多くは1本で1万〜3万字。関係するほかの手順書は必要な節だけ）を読み込みます。
+入れておくだけなら、毎回のセッションに加わるのはスキルの説明文（約310字）だけです。`claude plugin details` の推定では約270トークンです。依頼したときは、SKILL.md（約1万700字）と、依頼に合った手順書（多くは1本で1万〜3万字。関係するほかの手順書は必要な節だけ）を読み込みます。
 
 テストの実行方法と合格の条件は [tests/README.md](tests/README.md) にあります。
 

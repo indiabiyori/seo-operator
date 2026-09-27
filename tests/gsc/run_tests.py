@@ -34,6 +34,7 @@ import subprocess
 import sys
 import unicodedata
 import zipfile
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -1191,6 +1192,21 @@ def zip_patch(data, flag_or=0, method=None, central_size=None):
     return bytes(b)
 
 
+def zip_unicode_path(raw_name, unicode_name, data):
+    """フラグなしの名前 raw_name に、Info-ZIP の Unicode Path 拡張フィールド（0x7075）で unicode_name を付けた zip。"""
+    buf = io.BytesIO()
+    placeholder = "A" * len(raw_name)
+    body = struct.pack("<BI", 1, zlib.crc32(raw_name)) + unicode_name.encode("utf-8")
+    info = zipfile.ZipInfo(placeholder, date_time=(2026, 9, 27, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.extra = struct.pack("<HH", 0x7075, len(body)) + body
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(info, data)
+    out = buf.getvalue()
+    assert out.count(placeholder.encode("ascii")) == 2
+    return out.replace(placeholder.encode("ascii"), raw_name)
+
+
 ZIP_CHART_JA = ("平均読み込み時間のチャート.csv", "日付,クリック数,表示回数,CTR,掲載順位\n2026-09-01,10,300,3.33%,8.1".encode())
 ZIP_TAIL_JA = [
     ("国.csv", "国,クリック数,表示回数,CTR,掲載順位\n日本,41,1332,3.08%,5.9".encode()),
@@ -1220,6 +1236,8 @@ def gen_zip():
     write_raw("x_zip_appledouble.zip", zip_bytes([(b"._" + u, b"\x00\x05\x16\x07"), ("前年のクエリ.csv", sq), (u, sq)]))
     write_raw("x_zip_cp932.zip", zip_bytes([("クエリ.csv".encode("cp932"), sq), ("ページ.csv".encode("cp932"), sp)]))
     write_raw("x_zip_nfd.zip", zip_bytes([(unicodedata.normalize("NFD", "ページ.csv"), sp)] + ZIP_TAIL_JA))
+    write_raw("x_zip_stored.zip", zip_bytes([("クエリ.csv", sq), ("ページ.csv", sp)], compression=zipfile.ZIP_STORED))
+    write_raw("x_zip_7075.zip", zip_unicode_path("クエリ.csv".encode("cp932"), "クエリ.csv", sq))
     write_raw("x_zip_query_only.zip", zip_bytes([("クエリ.csv", sq)] + ZIP_TAIL_JA[:2]))
     write_raw("x_zip_no_match.zip", zip_bytes([("__MACOSX/._国.csv", b"\x00\x05\x16\x07"),
                                                ("._デバイス.csv", b"\x00\x05\x16\x07")] + ZIP_TAIL_JA[:2]))
@@ -1238,6 +1256,9 @@ def gen_zip():
     write_raw("x_zip_size_lie.zip", zip_patch(one, central_size=100))
     write_raw("x_zip_bad_utf8flag.zip", zip_patch(zip_bytes([("クエリ.csv".encode("cp932"), sq)]), flag_or=0x800))
     write_raw("x_zip_empty_member.zip", zip_bytes([("クエリ.csv", b"")]))
+    # クエリの表が壊れていてページの表があるとき、auto でページの表に切り替えない
+    write_raw("x_zip_q_empty_with_page.zip", zip_bytes([("クエリ.csv", b""), ("ページ.csv", sp)]))
+    write_raw("x_zip_q_badheader_with_page.zip", zip_bytes([("クエリ.csv", b"foo,bar"), ("ページ.csv", sp)]))
     # ページで絞り込んだエクスポート: クエリの表がヘッダー行だけで、ページの表にデータがある
     write_raw("x_zip_page_filtered.zip", zip_bytes([("クエリ.csv", q_header_only), ("ページ.csv", sp)]))
     write_raw("x_zip_header_only.zip", zip_bytes([("クエリ.csv", q_header_only)] + ZIP_TAIL_JA[:2]))
@@ -1320,6 +1341,9 @@ def zip_tests(r, args):
            stderr_has=("x_zip_cp932.zip の中の ページ.csv",), **s_p)
     r.case("Z NFD の名前（ページ.csv の濁点・半濁点が分解）: auto はページの表だけならページ", sd, ["x_zip_nfd.zip"],
            stderr_has=("x_zip_nfd.zip の中の ページ.csv",), **s_p)
+    r.case("Z 無圧縮（Stored）の zip", sd, ["x_zip_stored.zip"], stderr_has=("x_zip_stored.zip の中の クエリ.csv",), **s_q)
+    r.case("Z cp932 の名前に Unicode Path 拡張フィールド（0x7075）が付いた zip", sd, ["x_zip_7075.zip"],
+           stderr_has=("x_zip_7075.zip の中の クエリ.csv（",), **s_q)
     proc = subprocess.run([args.python, "-c", WINSEP_CODE, os.path.join(args.scripts, sd),
                            os.path.join(DATA, "x_zip_winsep.zip")],
                           capture_output=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
@@ -1371,6 +1395,21 @@ def zip_tests(r, args):
            stderr_has=("zip ファイルを読めません", "ダウンロードし直して"))
     r.case("Z 展開後の大きさの申告が上限を超える（展開せずに止める）", sd, ["x_zip_big_declared.zip"], exit_code=2,
            stderr_has=("大きすぎます（展開後 300.0 MB、上限 100 MB）", "集計してから"))
+    # zip ファイル自体が上限を超える（中身は読まない。スパースファイルなのでディスクはほとんど使わない）
+    huge = os.path.join(DATA, "x_zip_huge_file.zip")
+    with open(huge, "wb") as f:
+        f.write(b"PK\x03\x04")
+        f.truncate(101 * 1024 * 1024)
+    r.case("Z zip ファイル自体が 100 MB を超える（開く前に止める）", sd, ["x_zip_huge_file.zip"], exit_code=2,
+           stderr_has=("zip ファイルが大きすぎます（101.0 MB、上限 100 MB）: x_zip_huge_file.zip",))
+    os.remove(huge)
+    big_pipe = subprocess.run([args.python, os.path.join(args.scripts, sd), "/dev/stdin"],
+                              input=b"PK\x03\x04" + bytes(100 * 1024 * 1024), capture_output=True, cwd=DATA,
+                              env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+    big_err = big_pipe.stderr.decode("utf-8", errors="replace")
+    r.record("Z パイプで渡した zip が 100 MB を超える（上限 + 1 バイトまでしか読まない）",
+             big_pipe.returncode == 2 and "zip ファイルが大きすぎます（上限 100 MB を超えています）: /dev/stdin" in big_err,
+             f"終了コード {big_pipe.returncode}、stderr: {big_err.strip()[-200:]}")
     r.case("Z 展開後の大きさの申告が実際より小さい（CRC の不一致で止める）", sd, ["x_zip_size_lie.zip"], exit_code=2,
            stderr_has=("zip ファイルを読めません", "Bad CRC-32"))
     r.case("Z UTF-8 のフラグがあるのに名前が cp932", sd, ["x_zip_bad_utf8flag.zip"], exit_code=2,
@@ -1379,6 +1418,13 @@ def zip_tests(r, args):
     # --- 中の表の中身 ---
     r.case("Z 0 バイトのクエリ.csv", sd, ["x_zip_empty_member.zip"], exit_code=2,
            stderr_has=("ファイルが空です（ヘッダー行もありません）: x_zip_empty_member.zip の中の クエリ.csv",))
+    r.case("Z 0 バイトのクエリ.csv とページ.csv: auto でもページの表に切り替えない", sd, ["x_zip_q_empty_with_page.zip"],
+           exit_code=2, stderr_has=("ファイルが空です（ヘッダー行もありません）: x_zip_q_empty_with_page.zip の中の クエリ.csv",),
+           stderr_not_has=("データ行がないため",))
+    r.case("Z 列名が壊れたクエリ.csv とページ.csv: auto でもページの表に切り替えない", sd,
+           ["x_zip_q_badheader_with_page.zip"], exit_code=2,
+           stderr_has=("必須の列が見つかりません: x_zip_q_badheader_with_page.zip の中の クエリ.csv",),
+           stderr_not_has=("データ行がないため",))
     r.case("Z クエリの表がヘッダー行だけ（ページで絞り込んだエクスポート）: auto はページの表", sd,
            ["x_zip_page_filtered.zip"],
            stderr_has=("x_zip_page_filtered.zip の中の ページ.csv（",

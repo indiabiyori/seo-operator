@@ -21,7 +21,7 @@ low_ctr.py - 掲載順位のわりに CTR が低いクエリ（またはペー�
     表の名前は英字の大文字・小文字を区別せず、zip の中のフォルダも探す。UTF-8 のフラグがない名前
     （macOS や Windows で圧縮し直した zip）も読む。--key auto はクエリの表を読み、クエリの表にデータ行がなく
     ページの表があれば、ページの表を読む。次の zip は入力エラーにする: 該当する表がないか 2 つ以上ある、
-    パスワード付き、壊れている、Deflate 以外の圧縮方式、表が展開後 100 MB を超える。
+    パスワード付き、壊れている、無圧縮と Deflate 以外の圧縮方式、zip ファイルか表が（展開後に）100 MB を超える。
   - 文字コード: BOM があればそれに従う。なければ UTF-8 → cp932 の順に試す。BOM なしの UTF-16 も NUL バイトの
     位置で見分ける。UTF-8 として壊れたバイトが少しだけある場合は置き換えて読み、標準エラー出力に警告を出す。
   - 区切り文字: カンマ・タブ・セミコロンのうち、ヘッダー行で既知の列名が最も多く見つかるものを使う。
@@ -180,9 +180,13 @@ ZIP_TABLE_LABELS = {key: label for key, label, _names in ZIP_TABLES}
 # 展開後の大きさの上限（1 つの表）。画面からのエクスポートは 1 表 1,000 行で、数百 KB にもならない。
 # 小さな zip が展開すると膨らむ場合（zip 爆弾）に、メモリを使い切らないための上限
 ZIP_MEMBER_LIMIT = 100 * 1024 * 1024
+# zip ファイル自体の大きさの上限。zipfile は開くときに中央ディレクトリ（中の名前の一覧）をすべて読むため、
+# 選んだ表の上限とは別に設ける。画面からのエクスポートの zip は数 KB〜数百 KB
+ZIP_FILE_LIMIT = 100 * 1024 * 1024
 ZIP_METHODS = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
 # zip の読み込みで起きうる例外（壊れた zip、CRC の不一致、名前の文字コードの不整合など）
-ZIP_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError, OSError, ValueError, NotImplementedError, RuntimeError)
+ZIP_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError, OSError, ValueError, OverflowError, NotImplementedError,
+              RuntimeError)
 
 
 class InputError(Exception):
@@ -410,8 +414,9 @@ def read_zip_export(fileobj, path, key_option, limit=ZIP_MEMBER_LIMIT):
     """Search Console の zip を展開せずに読み、--key に合う表を (テキスト, 文字コード名, 警告のリスト, 表示名) で返す。
 
     --key query はクエリの表（クエリ.csv / Queries.csv）、page はページの表（ページ.csv / Pages.csv）を読み、
-    もう一方には切り替えない。auto はクエリの表を読む。ただし、クエリの表にデータ行がなく、ページの表があれば、
-    ページの表を読む（ページで絞り込んだエクスポートでは、クエリの表がヘッダー行だけのことがある）。
+    もう一方には切り替えない。auto はクエリの表を読む。ただし、クエリの表がヘッダー行だけ（列はそろっていて
+    データ行がない）で、ページの表があれば、ページの表を読む（ページで絞り込んだエクスポートでは、クエリの表が
+    ヘッダー行だけのことがある）。空のファイルや列の足りない表は切り替えず、そのまま入力エラーにする。
     ディスクには何も書かない。
     """
     try:
@@ -428,7 +433,7 @@ def read_zip_export(fileobj, path, key_option, limit=ZIP_MEMBER_LIMIT):
         notes = []
         if key_option == "auto" and chosen == "query" and found["page"]:
             page_member = found["page"][0][1]
-            if has_data_rows(text):
+            if not is_header_only(text, "query"):
                 notes.append(f"注意: zip にはページの表（{page_member}）もあります。--key auto ではクエリの表を使います。"
                              "ページ別に見るなら --key page を付けてください。")
             else:
@@ -531,6 +536,26 @@ def has_data_rows(text):
     return False
 
 
+def is_header_only(text, field):
+    """ヘッダー行に field（query など）と必須の指標の列がそろい、データ行が 1 行もなければ True。"""
+    if has_data_rows(text):
+        return False
+    for delimiter, _name in DELIMITERS:
+        found, _conflicts = find_columns(first_record(text, delimiter))
+        if field in found and all(m in found for m in REQUIRED_METRICS):
+            return True
+    return False
+
+
+def zip_file_too_big(path, size=None):
+    """zip ファイル自体が上限を超えるときの入力エラー。size が None なら、読んだ量が上限を超えたことだけを示す。"""
+    shown = f"{format_mb(size)}、上限 {ZIP_FILE_LIMIT // 1048576} MB" if size is not None else (
+        f"上限 {ZIP_FILE_LIMIT // 1048576} MB を超えています")
+    return InputError(f"zip ファイルが大きすぎます（{shown}）: {path}\n"
+                      "  対処: Search Console の画面からエクスポートした zip は数 KB〜数百 KB です。"
+                      "ほかのファイルも入れて圧縮し直した zip なら、展開して使う CSV を直接指定してください。")
+
+
 def read_text(path):
     """zip を受け付けない入力（low_ctr.py の --benchmark）のファイルを読み、(テキスト, 文字コード名, 警告のリスト) を返す。"""
     data = read_bytes(path)
@@ -544,6 +569,7 @@ def read_export_text(path, key_option):
 
     先頭の 4 バイトで zip かどうかを判定する（拡張子は見ない）。zip なら展開せずに、--key に合う表を読む。
     zip はファイル全体をメモリに読まず、中央ディレクトリと選んだ表だけを読む（シークできない入力だけはメモリに読む）。
+    zip ファイル自体が ZIP_FILE_LIMIT を超えるときは、開く前に入力エラーにする。
     表示名は、CSV ならパス、zip なら「x.zip の中の クエリ.csv」。
     """
     try:
@@ -554,10 +580,19 @@ def read_export_text(path, key_option):
         try:
             head = f.read(4)
             is_zip = head in ZIP_MAGICS
-            data = None if (is_zip and f.seekable()) else head + f.read()
+            size = data = None
+            if is_zip and f.seekable():
+                size = f.seek(0, os.SEEK_END)
+                f.seek(0)
+            elif is_zip:
+                data = head + f.read(ZIP_FILE_LIMIT + 1 - len(head))
+            else:
+                data = head + f.read()
         except OSError as e:
             raise input_file_error(path, e)
         if is_zip:
+            if (size if data is None else len(data)) > ZIP_FILE_LIMIT:
+                raise zip_file_too_big(path, size)
             return read_zip_export(f if data is None else io.BytesIO(data), path, key_option)
     text, encoding, warnings = decode_text(data, path)
     return text, encoding, warnings, path
