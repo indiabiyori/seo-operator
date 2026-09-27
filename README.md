@@ -109,12 +109,12 @@ claude plugin update seo-operator@seo-operator
 seo-operator で初回セットアップをして
 ```
 
-Claude は作業フォルダに `seo/site-brief.md` と `seo/voice-guide.md` をひな形から作ります。site-brief は事業内容、CV の定義、ターゲット、競合、法規制などをまとめるファイルで、施策の優先度を決める土台になります。voice-guide は文体と表記のルールで、記事を書くときに使います。どちらも、自分で書き込むか、Claude の質問（1回5問以内）に答えて埋めるかを選べます。答えなかった項目は `[要追加]` のまま残ります。
+Claude は作業フォルダに `seo/site-brief.md` と `seo/voice-guide.md` をひな形から作ります。site-brief は事業内容、CV の定義、ターゲット、競合、法規制などをまとめるファイルで、施策の優先度を決める土台になります。voice-guide は文体と表記のルールで、記事を書くときに使います。どちらも、自分で書き込むか、Claude の質問（1回5問以内）に答えて埋めるかを選べます。答えなかった項目は `[要追加]` のまま残ります。あわせて、Search Console などから書き出したデータを置く `seo/data/` と、スクリプトの結果を書く `seo/output/` も作ります。作業フォルダを Git で管理しているときは、この2つを `.gitignore` に足すかを Claude が確かめます。どちらにも、クエリやページごとの実績が入るためです。
 
-情報がそろったら、使うデータを作業フォルダに置いてから頼みます。Search Console から書き出した zip は展開し、中の CSV を置いてください。書き出し方は、Claude に聞けば画面の順に案内します。
+情報がそろったら、使うデータを `seo/data/` に置いてから頼みます。Search Console から書き出した zip は展開し、中の CSV を置いてください。書き出し方は、Claude に聞けば画面の順に案内します。
 
 ```
-作業フォルダのクエリ.csv を使って、順位を上げやすいクエリを出して
+seo/data/クエリ.csv を使って、順位を上げやすいクエリを出して
 ```
 
 ```
@@ -151,11 +151,12 @@ Search Console を分析する3本は、画面から書き出した CSV を読�
 
 `audit.py` は、自社のサイトか、許可を得たサイトにだけ使ってください。既定では1秒おきに1件ずつ取得し、robots.txt に従います。社内ネットワークなどの内部アドレスにはリダイレクト先も含めて接続せず、サイトマップと違うホストの URL も取得しません。ほかのホストへのリダイレクトは、内部アドレスでなければたどります。robots.txt がサーバーエラー・429・タイムアウトなどで取れないときは、RFC 9309 と Google の仕様に合わせて、その robots.txt が対象とするページを取得せず、`BLOCKED:robots-unreachable` として記録します。自社サイトで一時的に取れないだけなら、`--ignore-robots` を付けると続けられます。
 
-自分で動かす場合は、リポジトリのフォルダで次のように実行します（uv を使う例）。オプションはそれぞれ `--help` で確かめられます。
+自分で動かす場合は、リポジトリのフォルダで次のように実行します（uv を使う例）。Search Console から書き出した CSV は `seo/data/` に置いておきます。スクリプトは出力先のフォルダを作らないので、先に `seo/output/` を作っておきます。オプションはそれぞれ `--help` で確かめられます。
 
 ```bash
-uv run skills/seo-operator/scripts/audit.py https://example.jp/sitemap.xml -o audit.csv --limit 500
-uv run skills/seo-operator/scripts/striking_distance.py クエリ.csv -o striking.csv
+mkdir -p seo/output
+uv run skills/seo-operator/scripts/audit.py https://example.jp/sitemap.xml -o seo/output/audit.csv --limit 500
+uv run skills/seo-operator/scripts/striking_distance.py seo/data/クエリ.csv -o seo/output/striking.csv
 ```
 
 ## 動作環境とテスト
@@ -182,4 +183,4 @@ MIT ライセンスです（[LICENSE](LICENSE)）。第三者の著作物とラ�
 
 不具合の報告や質問は [Issues](https://github.com/indiabiyori/seo-operator/issues) にお寄せください。
 
-版 1.2.0（最終更新 2026-09-27）。手順書の内容は2026年9月時点のものです。
+版 1.3.0（最終更新 2026-09-27）。手順書の内容は2026年9月時点のものです。

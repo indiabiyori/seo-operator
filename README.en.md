@@ -50,7 +50,7 @@ To update a plugin install, run `claude plugin marketplace update seo-operator` 
 
 ## Getting started
 
-Create one working folder per site, open Claude Code there, and ask for the initial setup, for example `seo-operator で初回セットアップをして` ("run the seo-operator initial setup"). Claude creates `seo/site-brief.md` (business, conversions, audience, competitors, legal constraints) and `seo/voice-guide.md` (style and notation rules) from templates and fills them in with you. Unanswered items stay as `[要追加]`. Then put your data in the folder, such as a CSV exported from Search Console, and ask for the analysis.
+Create one working folder per site, open Claude Code there, and ask for the initial setup, for example `seo-operator で初回セットアップをして` ("run the seo-operator initial setup"). Claude creates `seo/site-brief.md` (business, conversions, audience, competitors, legal constraints) and `seo/voice-guide.md` (style and notation rules) from templates and fills them in with you. Unanswered items stay as `[要追加]`. Claude also creates `seo/data/` for the data you export and `seo/output/` for the scripts' results, and if the working folder is a Git repository, it asks whether to add both to `.gitignore`, since both hold per-query and per-page figures. Then put your data in `seo/data/`, such as the CSV files unzipped from a Search Console export, and ask for the analysis.
 
 ## Using audit.py safely
 
@@ -72,4 +72,4 @@ The behavior evals in [evals/](evals/README.md) (in Japanese) measure how Claude
 
 MIT (see [LICENSE](LICENSE)). Parts of the playbooks in `skills/seo-operator/references/` summarize and adapt [Google Search Central documentation](https://developers.google.com/search/docs), which Google publishes under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with code samples under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party works and licenses.
 
-Version 1.2.0 (last updated 2026-09-27).
+Version 1.3.0 (last updated 2026-09-27).
