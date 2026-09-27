@@ -36,6 +36,9 @@
   "setup-stall": "PASS",
   "year-not-stale": "FAIL"
  },
+ "desc_check_with": {
+  "no-invented-claims": "PASS"
+ },
  "full1_with_run2": {
   "no-invented-claims": "PASS",
   "year-not-stale": "PASS"

@@ -162,7 +162,7 @@ uv run skills/seo-operator/scripts/striking_distance.py クエリ.csv -o strikin
 
 2026-09-26 に、macOS の Python 3.9（pandas 2.3）と 3.13（pandas 3.0）で、テスト200件がすべて通ることを確かめました。GitHub Actions でも、main への push と pull request のたびに、Ubuntu の Python 3.9 と 3.13 で同じテストを回します。Python 3.10〜3.12 と Windows では、まだ動かしていません。
 
-入れておくだけなら、毎回のセッションに加わるのはスキルの説明文（約740字）だけです。`claude plugin details` の推定では約190トークンですが、日本語を含むため、実際にはこれより多くなることがあります。依頼したときは、SKILL.md（約8,000字）と、依頼に合った手順書（多くは1本で1万〜3万字。関係するほかの手順書は必要な節だけ）を読み込みます。
+入れておくだけなら、毎回のセッションに加わるのはスキルの説明文（約310字）だけです。`claude plugin details` の推定では約270トークンです。依頼したときは、SKILL.md（約8,000字）と、依頼に合った手順書（多くは1本で1万〜3万字。関係するほかの手順書は必要な節だけ）を読み込みます。
 
 テストの実行方法と合格の条件は [tests/README.md](tests/README.md) にあります。
 

@@ -1,6 +1,6 @@
 ---
 name: seo-operator
-description: 日本語サイト（メディア・EC・コーポレート・LP）向けの汎用SEOスキル。SEO対策、キーワード調査・選定、サイト監査（技術的SEO・インデックス・canonical・noindex・リダイレクト）、トピッククラスター設計、コンテンツブリーフ・構成案の作成、記事の執筆・リライト、title・meta description・見出し・構造化データの改善、内部リンク設計、Search Console（GSC）のデータ分析（順位8〜20位のクエリ、低CTR、順位や流入の下落）、被リンク獲得、AI による概要（AI Overviews）・AI モード・ChatGPT などの AI 検索での引用対策を頼まれたときに使う。General-purpose SEO operator for Japanese-language websites. Use for SEO, keyword research, site and technical SEO audits, topical maps, content briefs, article writing and rewrites, title/meta description/heading/structured data (schema) fixes, internal linking, Google Search Console analysis (striking-distance keywords, low CTR, content decay), link building, and AI search optimization (AI Overviews, AI Mode, LLM citations).
+description: 日本語のページを、自然検索（オーガニック検索）や AI 検索で見つけてもらい、表示・流入・引用を増やしたいときに使う。キーワード調査、技術的な SEO とインデックス、サイト構成・トピッククラスター、SEO のための記事の構成案・執筆・リライト、title・meta description・見出し・構造化データ、内部リンク、Search Console の分析、被リンク、AI による概要や ChatGPT などでの引用対策が対象。記事や LP でも、検索での改善が主な目的でない執筆・校正・翻訳、広告・SNS・プレスリリースの文案、見た目だけのデザインの相談には使わない。日本語のページを対象としない SEO にも使わない。
 ---
 
 # seo-operator

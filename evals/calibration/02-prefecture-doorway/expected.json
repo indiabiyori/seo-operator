@@ -1,4 +1,7 @@
 {
+ "desc_check_with": {
+  "no-name-swapped-pages": "PASS"
+ },
  "fallback_all_pref_title_meta": {
   "compliant-alternative": "PASS",
   "delivers-fitting-draft": "PASS",
