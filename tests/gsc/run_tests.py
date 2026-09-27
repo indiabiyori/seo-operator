@@ -10,7 +10,9 @@ GSC 系スクリプト（striking_distance.py / low_ctr.py / decay.py）の検�
 3. attack_tests(): 壊しにいくテスト（数値の表記、区切り文字、文字コード、列名の重複、値の異常、
    掲載順位 0（エクスポートで値なしが 0 になったもの）、
    CSV インジェクション対策、decay のキー照合、引数の範囲、Python 3.9 の文法、10 万行の処理時間、
-   共通部分の同一性、__pycache__ の有無）。
+   共通部分の同一性）。
+4. zip_tests(): Search Console の zip を展開せずに読むテスト（表の選び方、名前の文字コード、読めない zip、
+   decay に zip を 2 つ渡す場合）。最後にスキルのフォルダに __pycache__ がないことを確かめる。
 
 使い方:
   python run_tests.py [--python 実行する Python] [--scripts スクリプトのディレクトリ] [--label 結果ファイル名の接尾辞]
@@ -27,8 +29,11 @@ import io
 import json
 import os
 import re
+import struct
 import subprocess
 import sys
+import unicodedata
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
@@ -650,10 +655,6 @@ def gen_attack():
     broken = good.replace("野菜 保存方法".encode("utf-8"), "野菜 保存".encode("utf-8") + b"\xff" + "方法".encode("utf-8"))
     write_raw("x_utf8_one_bad_byte.csv", broken)
     write_raw("x_utf8_nul.csv", good.replace("旬の野菜".encode("utf-8"), "旬の\x00野菜".encode("utf-8")))
-    import zipfile
-    with zipfile.ZipFile(os.path.join(DATA, "x_export.zip"), "w") as z:
-        z.writestr("Queries.csv", base)
-        z.writestr("Pages.csv", base)
     os.makedirs(os.path.join(DATA, "x_dir.csv"), exist_ok=True)
 
     # --- セルの中のカンマ・改行、CSV インジェクション ---
@@ -806,14 +807,16 @@ def attack_tests(r, args):
         sd: ("usage: striking_distance.py", "--min-impressions 回数", "デフォルト: 100", "--no-sanitize",
              "BOM なし", "予測ではなく", "セミコロン", "終了コード", "Data Studio（旧 Looker Studio）",
              "--min-impressions 20", "--top を付けずに出力し、impressions で並べ替えてから上位 30 件",
-             zero_help + "その行を除外する")
+             zero_help + "その行を除外する", "zip はそのまま渡せる")
             + sanitize_help,
         lc: ("usage: low_ctr.py", "0 より大きく 1 以下", "--no-sanitize", "BOM なし", "[1,2)", "--benchmark",
-             "--max-pos 5 を指定する", "「平均順位 5 位以内」で見るなら 5", zero_help + "その行を除外する")
+             "--max-pos 5 を指定する", "「平均順位 5 位以内」で見るなら 5", zero_help + "その行を除外する",
+             "zip はそのまま渡せる", "zip は使えない")
             + sanitize_help,
         dc: ("usage: decay.py", "季節性の影響を避けるため、前年同期との比較を推奨", "デフォルト: 30.0",
              "--no-sanitize", "BOM なし", "末尾の / の違いは別の URL", "比較表示", "原因の断定ではない",
-             "匿名化されたクエリは行に出ない", zero_help + "position と pos_diff を空欄にして「順位低下」の判定に使わない")
+             "匿名化されたクエリは行に出ない", zero_help + "position と pos_diff を空欄にして「順位低下」の判定に使わない",
+             "zip はそのまま渡せる", "ページ同士で比べるなら --key page")
             + sanitize_help,
     }
     for script, needles in help_expect.items():
@@ -821,7 +824,7 @@ def attack_tests(r, args):
         text = out.decode("utf-8", errors="replace")
         flat = re.sub(r"\s*\n\s*", " ", text)  # argparse が空白で折り返すので、改行と字下げを空白 1 つに戻して照合する
         missing = [s for s in needles if s not in flat]
-        stale = [s for s in ("ファイルにも標準出力にも", "標準出力にも同じ") if s in flat]
+        stale = [s for s in ("ファイルにも標準出力にも", "標準出力にも同じ", "UI の zip の中の") if s in flat]
         stale += ["Looker Studio（旧名なし）"] if re.search(r"(?<!旧 )Looker Studio", flat) else []
         r.record(f"X --help {script}", code == 0 and not missing and not stale and not err,
                  f"終了コード {code}" + (f"、見つからない記載: {missing}" if missing else "、必要な記載あり")
@@ -831,7 +834,7 @@ def attack_tests(r, args):
             src = f.read()
         head = src.split("\nimport argparse", 1)[0]
         need = ["BOM なし", "--no-sanitize", "-o で書くファイルでは", "標準出力には付けない",
-                "先頭の ' を除くか"]
+                "先頭の ' を除くか", "zip はそのまま渡せる", "ディスクには書かない"]
         need += ["季節性の影響を避けるため、前年同期との比較を推奨", "匿名化されたクエリ"] if script == dc else []
         need += ["100 回以上", "--top を付けずに出力し"] if script == sd else []
         need += ["--max-pos 5 を指定する"] if script == lc else []
@@ -840,7 +843,7 @@ def attack_tests(r, args):
         need += ["その行を除外して件数を内訳に出す"] if script in (sd, lc) else [
             "その期間の position を空欄にする（pos_diff も空欄になり「順位低下」の判定に使わない"]
         missing = [s for s in need if s not in head]
-        stale = [s for s in ("標準出力にも同じように適用", "タブ・改行") if s in src]
+        stale = [s for s in ("標準出力にも同じように適用", "タブ・改行", "UI からダウンロードした zip の中の") if s in src]
         stale += ["Looker Studio（旧名なし）"] if re.search(r"(?<!旧 )Looker Studio", src) else []
         r.record(f"X ヘッダーコメント {script}", not missing and not stale,
                  "必要な記載あり" if not (missing or stale) else f"見つからない: {missing}、古い記載: {stale}")
@@ -951,8 +954,6 @@ def attack_tests(r, args):
     r.case("X UTF-8 に壊れたバイトが 1 個（置き換えて読む。UTF-16 と誤判定しない）", sd, ["x_utf8_one_bad_byte.csv"],
            stderr_has=("文字コード utf-8", "不正なバイトが 1 個"), stderr_not_has=("utf-16",), **s_common)
     r.case("X NUL 文字が混じった UTF-8", sd, ["x_utf8_nul.csv"], stderr_has=("NUL 文字が 1 個",), **s_common)
-    r.case("X zip を渡した（GSC のダウンロードそのまま）", sd, ["x_export.zip"], exit_code=2,
-           stderr_has=("zip ファイル", "Queries.csv", "展開し", "という名前のことが多い"))
     r.case("X フォルダを渡した", sd, ["x_dir.csv"], exit_code=2, stderr_has=("フォルダ",))
 
     # --- セルの中のカンマ・改行 ---
@@ -1135,7 +1136,320 @@ def attack_tests(r, args):
         if os.path.exists(path):
             os.remove(path)
 
-    # --- スキルのフォルダに __pycache__ がない ---
+
+# ---------------------------------------------------------------------------
+# zip のまま読む（2026-09 v1.4 で追加）
+# ---------------------------------------------------------------------------
+
+def ui_csv(header, rows):
+    """Search Console の画面からのエクスポートと同じ形（BOM なしの UTF-8、LF、最後の行に改行なし）。"""
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    writer.writerow(header)
+    writer.writerows(rows)
+    return buf.getvalue().rstrip("\n").encode("utf-8")
+
+
+def zip_bytes(members, compression=zipfile.ZIP_DEFLATED, date_time=(2026, 9, 27, 0, 0, 0)):
+    """members は [(名前, バイト列)]。名前が bytes なら、UTF-8 のフラグを立てずにそのバイト列を名前にする。"""
+    buf = io.BytesIO()
+    patches = []
+    with zipfile.ZipFile(buf, "w", compression) as z:
+        for i, (name, data) in enumerate(members):
+            if isinstance(name, bytes):
+                placeholder = chr(ord("A") + i) * len(name)
+                patches.append((placeholder.encode("ascii"), name))
+                name = placeholder
+            info = zipfile.ZipInfo(name, date_time=date_time)
+            info.compress_type = compression
+            z.writestr(info, data)
+    out = buf.getvalue()
+    for placeholder, raw in patches:
+        assert out.count(placeholder) == 2, placeholder  # ローカルヘッダーと中央ディレクトリの 2 か所
+        out = out.replace(placeholder, raw)
+    return out
+
+
+def zip_patch(data, flag_or=0, method=None, central_size=None):
+    """全エントリのヘッダーを書き換える（フラグ・圧縮方式・中央ディレクトリの展開後の大きさ）。"""
+    b = bytearray(data)
+    eocd = data.rfind(b"PK\x05\x06")
+    count, _size, offset = struct.unpack("<HII", data[eocd + 10:eocd + 20])
+    p = offset
+    for _ in range(count):
+        nlen, elen, clen = struct.unpack_from("<HHH", b, p + 28)
+        local = struct.unpack_from("<I", b, p + 42)[0]
+        if flag_or:
+            struct.pack_into("<H", b, p + 8, struct.unpack_from("<H", b, p + 8)[0] | flag_or)
+            struct.pack_into("<H", b, local + 6, struct.unpack_from("<H", b, local + 6)[0] | flag_or)
+        if method is not None:
+            struct.pack_into("<H", b, p + 10, method)
+            struct.pack_into("<H", b, local + 8, method)
+        if central_size is not None:
+            struct.pack_into("<I", b, p + 24, central_size)
+        p += 46 + nlen + elen + clen
+    return bytes(b)
+
+
+ZIP_CHART_JA = ("平均読み込み時間のチャート.csv", "日付,クリック数,表示回数,CTR,掲載順位\n2026-09-01,10,300,3.33%,8.1".encode())
+ZIP_TAIL_JA = [
+    ("国.csv", "国,クリック数,表示回数,CTR,掲載順位\n日本,41,1332,3.08%,5.9".encode()),
+    ("デバイス.csv", "デバイス,クリック数,表示回数,CTR,掲載順位\nモバイル,37,1075,3.44%,5.95".encode()),
+    ("検索での見え方.csv", "検索での見え方,クリック数,表示回数,CTR,掲載順位".encode()),
+    ("フィルタ.csv", "フィルタ,値\n検索タイプ,ウェブ\n期間,過去 3 か月間".encode()),
+]
+
+
+def gen_zip():
+    sq = ui_csv(HEADERS["ja_q"], make_rows(S_ROWS, "query", "pct"))
+    sp = ui_csv(HEADERS["ja_p"], make_rows(S_ROWS, "page", "pct"))
+    eq = ui_csv(HEADERS["en_q"], make_rows(S_ROWS, "query", "pct"))
+    ep = ui_csv(HEADERS["en_p"], make_rows(S_ROWS, "page", "pct"))
+    q_header_only = ui_csv(HEADERS["ja_q"], [])
+    ja = zip_bytes([ZIP_CHART_JA, ("クエリ.csv", sq), ("ページ.csv", sp)] + ZIP_TAIL_JA)
+    write_raw("x_zip_ja.zip", ja)
+    write_raw("x_zip_named.csv", ja)
+    write_raw("x_export.zip", zip_bytes([("Chart.csv", b"Date,Clicks,Impressions,CTR,Position\n2026-09-01,1,2,50%,3"),
+                                         ("Queries.csv", eq), ("Pages.csv", ep),
+                                         ("Filters.csv", b"Filter,Value\nSearch type,Web\nDate,Last 3 months")]))
+    u = "クエリ.csv".encode()
+    write_raw("x_zip_mac.zip", zip_bytes([(b"export/", b""), (b"export/" + u, sq),
+                                          (b"export/" + "ページ.csv".encode(), sp),
+                                          (b"__MACOSX/export/._" + u, b"\x00\x05\x16\x07")]))
+    # ditto を --keepParent なしで使った形（最上位に ._クエリ.csv とクエリ.csv）。名前の末尾だけが同じ 前年のクエリ.csv も入れる
+    write_raw("x_zip_appledouble.zip", zip_bytes([(b"._" + u, b"\x00\x05\x16\x07"), ("前年のクエリ.csv", sq), (u, sq)]))
+    write_raw("x_zip_cp932.zip", zip_bytes([("クエリ.csv".encode("cp932"), sq), ("ページ.csv".encode("cp932"), sp)]))
+    write_raw("x_zip_nfd.zip", zip_bytes([(unicodedata.normalize("NFD", "ページ.csv"), sp)] + ZIP_TAIL_JA))
+    write_raw("x_zip_query_only.zip", zip_bytes([("クエリ.csv", sq)] + ZIP_TAIL_JA[:2]))
+    write_raw("x_zip_no_match.zip", zip_bytes([("__MACOSX/._国.csv", b"\x00\x05\x16\x07"),
+                                               ("._デバイス.csv", b"\x00\x05\x16\x07")] + ZIP_TAIL_JA[:2]))
+    write_raw("x_zip_pt.zip", zip_bytes([("Gráfico.csv", b"Data,Cliques\n2026-07-01,1"),
+                                         ("Consultas.csv", "Top consultas,Cliques,Impressões,CTR,Posição\na,1,2,50%,3".encode()),
+                                         ("Páginas.csv", "Páginas principais,Cliques,Impressões,CTR,Posição\nb,1,2,50%,3".encode())]))
+    write_raw("x_zip_ctrl_name.zip", zip_bytes([("国.csv\n  対処: この行は偽物.csv", b"a,b\n1,2")]))
+    write_raw("x_zip_two.zip", zip_bytes([("2025/クエリ.csv", sq), ("2026/クエリ.csv", sq)]))
+    write_raw("x_zip_empty.zip", zip_bytes([]))
+    write_raw("x_book.xlsx", zip_bytes([("[Content_Types].xml", b"<Types/>"), ("xl/workbook.xml", b"<workbook/>")]))
+    one = zip_bytes([("クエリ.csv", sq)])
+    write_raw("x_zip_encrypted.zip", zip_patch(one, flag_or=0x1))
+    write_raw("x_zip_deflate64.zip", zip_patch(one, method=9))
+    write_raw("x_zip_truncated.zip", one[:40])
+    write_raw("x_zip_big_declared.zip", zip_patch(one, central_size=300 * 1024 * 1024))
+    write_raw("x_zip_size_lie.zip", zip_patch(one, central_size=100))
+    write_raw("x_zip_bad_utf8flag.zip", zip_patch(zip_bytes([("クエリ.csv".encode("cp932"), sq)]), flag_or=0x800))
+    write_raw("x_zip_empty_member.zip", zip_bytes([("クエリ.csv", b"")]))
+    # ページで絞り込んだエクスポート: クエリの表がヘッダー行だけで、ページの表にデータがある
+    write_raw("x_zip_page_filtered.zip", zip_bytes([("クエリ.csv", q_header_only), ("ページ.csv", sp)]))
+    write_raw("x_zip_header_only.zip", zip_bytes([("クエリ.csv", q_header_only)] + ZIP_TAIL_JA[:2]))
+    write_raw("x_zip_genai.zip", zip_bytes([("Chart.csv", b"Date,Impressions\n2026-08-01,3"),
+                                           ("Pages.csv", b"Top pages,Impressions\nhttps://example.jp/,3"),
+                                           ("Filters.csv", b"Filter,Value\nSearch type,Web")]))
+    cmp_header = "上位のクエリ," + ",".join(f"過去 7 日間 {m},過去 7 日間 {m}" for m in ("クリック数", "表示回数", "CTR", "掲載順位"))
+    write_raw("x_zip_cmp.zip", zip_bytes([("クエリ.csv", (cmp_header + "\n野菜 宅配,1,0,1,0,100%,0%,12,0").encode())]))
+    lq = ui_csv(HEADERS["ja_q"], make_rows(L_FULL, "query", "pct"))
+    lp = ui_csv(HEADERS["ja_p"], make_rows(L_FULL, "page", "pct"))
+    write_raw("x_zip_ja_l.zip", zip_bytes([("クエリ.csv", lq), ("ページ.csv", lp)]))
+    d_prev = [(None, p, c, i, pos) for p, c, i, pos in D_PREV]
+    d_cur = [(None, p, c, i, pos) for p, c, i, pos in D_CUR]
+    d_prev_pages = ui_csv(HEADERS["ja_p"], make_rows(d_prev, "page", "pct"))
+    d_cur_pages = ui_csv(HEADERS["ja_p"], make_rows(d_cur, "page", "pct"))
+    qprev = "上位のクエリ,クリック数,表示回数,CTR,掲載順位\n野菜 宅配,100,1000,10%,3".encode()
+    qcur = "上位のクエリ,クリック数,表示回数,CTR,掲載順位\n野菜 宅配,50,1000,5%,3".encode()
+    write_raw("x_zip_d_prev.zip", zip_bytes([("クエリ.csv", qprev), ("ページ.csv", d_prev_pages)]))
+    cur_members = [("クエリ.csv", qcur), ("ページ.csv", d_cur_pages)]
+    write_raw("x_zip_d_cur.zip", zip_bytes(cur_members))
+    write_raw("x_zip_d_cur_again.zip", zip_bytes(cur_members, date_time=(2026, 9, 27, 9, 30, 0)))
+    write_raw("x_zip_d_cur_filtered.zip", zip_bytes([("クエリ.csv", q_header_only), ("ページ.csv", d_cur_pages)]))
+    write_raw("x_zip_winsep.zip", zip_bytes([("表示\\クエリ.csv".encode("cp932"), qprev)]))
+    # フィクスチャが意図どおりの形か（UTF-8 のフラグの有無、時刻だけ違う 2 つの zip）
+    with zipfile.ZipFile(os.path.join(DATA, "x_zip_ja.zip")) as z:
+        assert all(i.flag_bits & 0x800 for i in z.infolist())
+    for name in ("x_zip_mac.zip", "x_zip_cp932.zip", "x_zip_winsep.zip"):
+        with zipfile.ZipFile(os.path.join(DATA, name)) as z:
+            assert not any(i.flag_bits & 0x800 for i in z.infolist()), name
+    with open(os.path.join(DATA, "x_zip_d_cur.zip"), "rb") as f1, \
+            open(os.path.join(DATA, "x_zip_d_cur_again.zip"), "rb") as f2:
+        assert f1.read() != f2.read()
+
+
+WINSEP_CODE = r'''
+import importlib.util, io, os, sys
+sys.dont_write_bytecode = True
+os.sep = "\\"  # Windows の zipfile の動き（名前の \ を / に置き換える）を再現する
+spec = importlib.util.spec_from_file_location("gsc_script", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+with open(sys.argv[2], "rb") as f:
+    _text, _enc, _warnings, source = mod.read_zip_export(io.BytesIO(f.read()), "x_zip_winsep.zip", "auto")
+sys.stdout.buffer.write(source.encode("utf-8"))
+'''
+
+
+def zip_tests(r, args):
+    sd, lc, dc = "striking_distance.py", "low_ctr.py", "decay.py"
+    s_q = dict(header=["query"] + S_COLS, key_cols=["query"], value_cols=S_COLS, kinds=S_KINDS, expected=EXP_S_DEFAULT)
+    exp_pages = [(S_PAGE[e[0]],) + e[1:] for e in EXP_S_DEFAULT]
+    s_p = dict(header=["page"] + S_COLS, key_cols=["page"], value_cols=S_COLS, kinds=S_KINDS, expected=exp_pages)
+    d_p = dict(header=["page"] + D_COLS, key_cols=["page"], value_cols=D_COLS, kinds=D_KINDS, expected=EXP_D_DEFAULT)
+    gen_zip()
+    before = set(os.listdir(DATA))
+
+    # --- 表の選び方 ---
+    r.case("Z 日本語 UI の zip（名前は UTF-8・フラグあり）: auto はクエリ.csv", sd, ["x_zip_ja.zip"],
+           stderr_has=("入力: x_zip_ja.zip の中の クエリ.csv（文字コード utf-8、カンマ区切り、14 行",
+                       "zip にはページの表（ページ.csv）もあります", "--key page を付けて"),
+           checks=(("data/ にファイルが増えていない（展開していない）", lambda c, o, e: set(os.listdir(DATA)) == before),),
+           **s_q)
+    r.case("Z 日本語 UI の zip: --key page はページ.csv", sd, ["x_zip_ja.zip", "--key", "page"],
+           stderr_has=("入力: x_zip_ja.zip の中の ページ.csv",), stderr_not_has=("もあります",), **s_p)
+    r.case("Z 日本語 UI の zip: --key query（注意は出さない）", sd, ["x_zip_ja.zip", "--key", "query"],
+           stderr_has=("の中の クエリ.csv",), stderr_not_has=("もあります",), **s_q)
+    r.case("Z 英語 UI の zip（Chart.csv・Queries.csv・Pages.csv・Filters.csv）", sd, ["x_export.zip"],
+           stderr_has=("x_export.zip の中の Queries.csv",), stderr_not_has=("展開し",), **s_q)
+    r.case("Z 英語 UI の zip: --key page は Pages.csv", sd, ["x_export.zip", "--key", "page"],
+           stderr_has=("x_export.zip の中の Pages.csv",), **s_p)
+    r.case("Z 拡張子が .csv の zip（先頭のバイトで判定する）", sd, ["x_zip_named.csv"],
+           stderr_has=("x_zip_named.csv の中の クエリ.csv",), **s_q)
+
+    # --- 名前の文字コード・フォルダ・macOS のファイル ---
+    r.case("Z macOS で圧縮し直した zip（UTF-8・フラグなし、export/ の中、__MACOSX/._ 付き）", sd, ["x_zip_mac.zip"],
+           stderr_has=("x_zip_mac.zip の中の export/クエリ.csv",), **s_q)
+    r.case("Z ._クエリ.csv と 前年のクエリ.csv は数えない（名前の完全一致で選ぶ）", sd, ["x_zip_appledouble.zip"],
+           stderr_has=("x_zip_appledouble.zip の中の クエリ.csv（",), stderr_not_has=("複数",), **s_q)
+    r.case("Z Windows で圧縮し直した zip（cp932・フラグなし）: --key page", sd, ["x_zip_cp932.zip", "--key", "page"],
+           stderr_has=("x_zip_cp932.zip の中の ページ.csv",), **s_p)
+    r.case("Z NFD の名前（ページ.csv の濁点・半濁点が分解）: auto はページの表だけならページ", sd, ["x_zip_nfd.zip"],
+           stderr_has=("x_zip_nfd.zip の中の ページ.csv",), **s_p)
+    proc = subprocess.run([args.python, "-c", WINSEP_CODE, os.path.join(args.scripts, sd),
+                           os.path.join(DATA, "x_zip_winsep.zip")],
+                          capture_output=True, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+    got = proc.stdout.decode("utf-8", errors="replace")
+    r.record("Z Windows の区切り文字（cp932 の 0x5C を含む名前。os.sep を差し替えて再現）",
+             proc.returncode == 0 and got == "x_zip_winsep.zip の中の 表示\\クエリ.csv",
+             f"終了コード {proc.returncode}、表示名 {got!r}" + (f"、stderr: {proc.stderr.decode()[-300:]}" if proc.returncode else ""))
+    # シークできない入力（パイプ）の zip はメモリに読んでから開く
+    with open(os.path.join(DATA, "x_zip_ja.zip"), "rb") as f:
+        piped = subprocess.run([args.python, os.path.join(args.scripts, sd), "/dev/stdin"], input=f.read(),
+                               capture_output=True, cwd=DATA, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+    piped_err = piped.stderr.decode("utf-8", errors="replace")
+    r.record("Z パイプで渡した zip（シークできない入力）", piped.returncode == 0 and "/dev/stdin の中の クエリ.csv" in piped_err,
+             f"終了コード {piped.returncode}" + ("" if piped.returncode == 0 else f"、stderr: {piped_err[-300:]}"))
+
+    # --- 該当する表がない・複数ある ---
+    r.case("Z ページの表だけの zip に --key query", sd, ["x_zip_nfd.zip", "--key", "query"], exit_code=2,
+           stdout_empty=True,
+           stderr_has=("zip の中にクエリの表が見つかりません: x_zip_nfd.zip", "探した名前: クエリ.csv, Queries.csv",
+                       "ページの表（ページ.csv）はあります。ページの表を使うなら --key page を指定してください。"))
+    r.case("Z クエリの表だけの zip に --key page", sd, ["x_zip_query_only.zip", "--key", "page"], exit_code=2,
+           stdout_empty=True,
+           stderr_has=("zip の中にページの表が見つかりません: x_zip_query_only.zip", "探した名前: ページ.csv, Pages.csv",
+                       "クエリの表（クエリ.csv）はあります。クエリの表を使うなら --key query を指定してください。"))
+    r.case("Z 該当する表がない zip（__MACOSX と ._ は一覧に出さない）", sd, ["x_zip_no_match.zip"], exit_code=2,
+           stdout_empty=True,
+           stderr_has=("zip の中にクエリの表もページの表も見つかりません", "zip の中の CSV: 国.csv, デバイス.csv\n",
+                       "CSV を選んで書き出した zip"),
+           stderr_not_has=("._",))
+    r.case("Z 日本語・英語以外の UI の zip（ポルトガル語）", sd, ["x_zip_pt.zip"], exit_code=2,
+           stderr_has=("zip の中の CSV: Gráfico.csv, Consultas.csv, Páginas.csv", "ファイル名も列名も訳されている",
+                       "表示言語を日本語か英語にしてから"))
+    r.case("Z zip の中の名前の改行で表示の行を偽れない", sd, ["x_zip_ctrl_name.zip"], exit_code=2,
+           stderr_has=("国.csv\\n  対処: この行は偽物.csv",), stderr_not_has=("\n  対処: この行は偽物",))
+    r.case("Z 同じ種類の表が 2 つある zip（2025/ と 2026/）", sd, ["x_zip_two.zip"], exit_code=2,
+           stderr_has=("zip の中にクエリの表が複数あります", "候補: 2025/クエリ.csv, 2026/クエリ.csv", "展開して"))
+    r.case("Z 空の zip（先頭が PK\\x05\\x06）", sd, ["x_zip_empty.zip"], exit_code=2,
+           stderr_has=("見つかりません", "zip の中の CSV: （なし）"))
+    r.case("Z Excel の .xlsx", sd, ["x_book.xlsx"], exit_code=2,
+           stderr_has=("Excel の .xlsx ファイルのようです", "CSV を選んで"))
+
+    # --- 読めない zip ---
+    r.case("Z パスワード付きの zip", sd, ["x_zip_encrypted.zip"], exit_code=2,
+           stderr_has=("パスワード付きの zip は読めません: x_zip_encrypted.zip の中の クエリ.csv",),
+           stderr_not_has=("RuntimeError",))
+    r.case("Z 対応していない圧縮方式（Deflate64）", sd, ["x_zip_deflate64.zip"], exit_code=2,
+           stderr_has=("圧縮方式（番号 9）には対応していません",))
+    r.case("Z 途中で切れた zip", sd, ["x_zip_truncated.zip"], exit_code=2,
+           stderr_has=("zip ファイルを読めません", "ダウンロードし直して"))
+    r.case("Z 展開後の大きさの申告が上限を超える（展開せずに止める）", sd, ["x_zip_big_declared.zip"], exit_code=2,
+           stderr_has=("大きすぎます（展開後 300.0 MB、上限 100 MB）", "集計してから"))
+    r.case("Z 展開後の大きさの申告が実際より小さい（CRC の不一致で止める）", sd, ["x_zip_size_lie.zip"], exit_code=2,
+           stderr_has=("zip ファイルを読めません", "Bad CRC-32"))
+    r.case("Z UTF-8 のフラグがあるのに名前が cp932", sd, ["x_zip_bad_utf8flag.zip"], exit_code=2,
+           stderr_has=("zip ファイルを読めません", "UnicodeDecodeError"))
+
+    # --- 中の表の中身 ---
+    r.case("Z 0 バイトのクエリ.csv", sd, ["x_zip_empty_member.zip"], exit_code=2,
+           stderr_has=("ファイルが空です（ヘッダー行もありません）: x_zip_empty_member.zip の中の クエリ.csv",))
+    r.case("Z クエリの表がヘッダー行だけ（ページで絞り込んだエクスポート）: auto はページの表", sd,
+           ["x_zip_page_filtered.zip"],
+           stderr_has=("x_zip_page_filtered.zip の中の ページ.csv（",
+                       "クエリの表（クエリ.csv）にデータ行がないため、ページの表（ページ.csv）を使います"), **s_p)
+    r.case("Z クエリの表がヘッダー行だけ: --key query なら切り替えない（0 件）", sd,
+           ["x_zip_page_filtered.zip", "--key", "query"],
+           header=["query"] + S_COLS, key_cols=["query"], value_cols=S_COLS, kinds=S_KINDS, expected=[],
+           stderr_has=("入力行数: 0", "該当件数: 0"), stderr_not_has=("データ行がないため",))
+    r.case("Z ヘッダー行だけのクエリ.csv でページの表がない（0 件）", sd, ["x_zip_header_only.zip"],
+           header=["query"] + S_COLS, key_cols=["query"], value_cols=S_COLS, kinds=S_KINDS, expected=[],
+           stderr_has=("入力行数: 0", "該当件数: 0"))
+    r.case("Z 生成 AI パフォーマンス レポートの zip（Pages.csv に表示回数だけ）", sd, ["x_zip_genai.zip"], exit_code=2,
+           stderr_has=("必須の列が見つかりません: x_zip_genai.zip の中の Pages.csv", "clicks（クリック数）",
+                       "表示回数だけの表は、生成 AI パフォーマンス レポートなど"),
+           stderr_not_has=("列名を上のいずれかに変えてください",))
+    r.case("Z 比較表示のままの zip（同じ列名が 2 つずつ）", sd, ["x_zip_cmp.zip"], exit_code=2,
+           stderr_has=("x_zip_cmp.zip の中の クエリ.csv", "比較表示のまま"))
+
+    # --- low_ctr ---
+    exp_l_pages = [(L_PAGE[e[0]],) + e[1:] for e in EXP_L_DEFAULT]
+    r.case("Z low_ctr: zip を --key page で", lc, ["x_zip_ja_l.zip", "--key", "page"], header=["page"] + L_COLS,
+           key_cols=["page"], value_cols=L_COLS, kinds=L_KINDS, expected=exp_l_pages,
+           stderr_has=("x_zip_ja_l.zip の中の ページ.csv",))
+    r.case("Z low_ctr: --benchmark に zip は使えない", lc, ["lb_rows.csv", "--benchmark", "x_zip_ja.zip"], exit_code=2,
+           stderr_has=("この入力には使えません: x_zip_ja.zip",))
+
+    # --- decay ---
+    r.case("Z decay: zip を 2 つ（--key page）", dc,
+           ["--previous", "x_zip_d_prev.zip", "--current", "x_zip_d_cur.zip", "--key", "page"],
+           stderr_has=("[前期] 入力: x_zip_d_prev.zip の中の ページ.csv", "[今期] 入力: x_zip_d_cur.zip の中の ページ.csv"),
+           stderr_not_has=("同じ内容",), **d_p)
+    r.case("Z decay: zip を 2 つ（auto はクエリの表どうし）", dc,
+           ["--previous", "x_zip_d_prev.zip", "--current", "x_zip_d_cur.zip"],
+           header=["query"] + D_COLS, key_cols=["query"], value_cols=D_COLS, kinds=D_KINDS,
+           expected=[("野菜 宅配", 100, 50, -50, -50.0, 1000, 1000, 0.0, 0.1, 0.05, 3.0, 3.0, 0.0,
+                      "CTR低下（順位・表示回数は維持）")],
+           stderr_has=("x_zip_d_prev.zip の中の クエリ.csv", "zip にはページの表"))
+    r.case("Z decay: 前期は zip、今期は CSV（--key page）", dc,
+           ["--previous", "x_zip_d_prev.zip", "--current", "d_cur_ja.csv", "--key", "page"], **d_p)
+    r.case("Z decay: zip（auto でクエリの表）とページの CSV はキー列の種類が違う", dc,
+           ["--previous", "x_zip_d_prev.zip", "--current", "d_cur_ja.csv"], exit_code=2,
+           stderr_has=("キー列の種類が違います: 前期 query（x_zip_d_prev.zip の中の クエリ.csv）、今期 page（d_cur_ja.csv）",
+                       "Search Console の zip なら、--key query または --key page"))
+    r.case("Z decay: 今期だけページで絞り込んだ zip（auto）は、すべて消失にせず種類の違いで止める", dc,
+           ["--previous", "x_zip_d_prev.zip", "--current", "x_zip_d_cur_filtered.zip"], exit_code=2,
+           stderr_has=("キー列の種類が違います: 前期 query（x_zip_d_prev.zip の中の クエリ.csv）、"
+                       "今期 page（x_zip_d_cur_filtered.zip の中の ページ.csv）",))
+    r.case("Z decay: 同じ期間を 2 回ダウンロードした zip（時刻だけ違う）は同じ内容と警告", dc,
+           ["--previous", "x_zip_d_cur.zip", "--current", "x_zip_d_cur_again.zip", "--key", "page"],
+           header=["page"] + D_COLS, key_cols=["page"], value_cols=D_COLS, kinds=D_KINDS, expected=[],
+           stderr_has=("同じ内容のファイルです",))
+    r.case("Z decay: 同じ CSV を 2 つ（今までどおり同じ内容と警告）", dc,
+           ["--previous", "d_cur_ja.csv", "--current", "d_cur_ja.csv"],
+           header=["page"] + D_COLS, key_cols=["page"], value_cols=D_COLS, kinds=D_KINDS, expected=[],
+           stderr_has=("同じ内容のファイルです",))
+
+    # --- -o ---
+    with open(os.path.join(DATA, "x_zip_ja.zip"), "rb") as f:
+        zip_before = f.read()
+
+    def zip_unchanged(_code, _out, _err):
+        with open(os.path.join(DATA, "x_zip_ja.zip"), "rb") as f:
+            return f.read() == zip_before
+
+    # output_file を渡すと case() が先にそのファイルを消すので渡さない
+    r.case("Z -o が入力の zip と同じ（zip を上書きしない）", sd, ["x_zip_ja.zip", "-o", "x_zip_ja.zip"], exit_code=2,
+           stderr_has=("入力ファイルと同じ",), checks=(("zip が変わっていない", zip_unchanged),))
+
+
+def check_no_pycache(r):
+    """スキルのフォルダに __pycache__ がない（すべてのテストの後に調べる）。"""
     found = [os.path.join(root, d) for root, dirs, _files in os.walk(SKILL_DIR) for d in dirs if d == "__pycache__"]
     r.record("X スキルのフォルダに __pycache__ がない", not found, "なし" if not found else ", ".join(found))
 
@@ -1316,6 +1630,8 @@ def main():
            header=d_header, key_cols=["page"], value_cols=D_COLS, kinds=D_KINDS, expected=EXP_D_DEFAULT[:2])
 
     attack_tests(r, args)
+    zip_tests(r, args)
+    check_no_pycache(r)
 
     n_fail = sum(1 for x in r.results if x["result"] == "fail")
     print(f"\n合計 {len(r.results)} 件、失敗 {n_fail} 件（python: {args.python}）")

@@ -6,7 +6,7 @@ English: [README.en.md](README.en.md)
 
 Claude Code に日本語サイトの SEO を任せるためのスキルです。手元にないデータは推測で埋めず、どのツールのどの画面から何を取ってくればよいかを指示します。自分用に作ったものを、そのまま公開しています。
 
-キーワード調査から技術監査、AI 検索への対応まで、Claude が作業ごとに読む手順書を12本入れてあります。サイト監査と Search Console の分析には Python のスクリプトが4本付属し、200件のテストで挙動を確かめています。
+キーワード調査から技術監査、AI 検索への対応まで、Claude が作業ごとに読む手順書を12本入れてあります。サイト監査と Search Console の分析には Python のスクリプトが4本付属し、243件のテストで挙動を確かめています。
 
 自社や担当先の日本語サイトで SEO を進める Web 担当者、制作会社、フリーランスを想定しています。CTR や canonical などの SEO 用語は説明なしで使います。スクリプトは Claude が実行するので、Python の知識は要りません。使い始めるだけなら「インストール」と「最初の一歩」を読めば足ります。ほかの節は、必要になったときに開いてください。
 
@@ -111,10 +111,10 @@ seo-operator で初回セットアップをして
 
 Claude は作業フォルダに `seo/site-brief.md` と `seo/voice-guide.md` をひな形から作ります。site-brief は事業内容、CV の定義、ターゲット、競合、法規制などをまとめるファイルで、施策の優先度を決める土台になります。voice-guide は文体と表記のルールで、記事を書くときに使います。どちらも、自分で書き込むか、Claude の質問（1回5問以内）に答えて埋めるかを選べます。答えなかった項目は `[要追加]` のまま残ります。あわせて、Search Console などから書き出したデータを置く `seo/data/` と、スクリプトの結果を書く `seo/output/` も作ります。作業フォルダを Git で管理しているときは、この2つを `.gitignore` に足すかを Claude が確かめます。どちらにも、クエリやページごとの実績が入るためです。
 
-情報がそろったら、使うデータを `seo/data/` に置いてから頼みます。Search Console から書き出した zip は展開し、中の CSV を置いてください。書き出し方は、Claude に聞けば画面の順に案内します。
+情報がそろったら、使うデータを `seo/data/` に置いてから頼みます。Search Console から書き出した zip は、展開せずにそのまま置いて構いません。期間を変えて2回以上書き出すときは、zip の名前を期間がわかるものに変えておくと取り違えません。書き出し方は、Claude に聞けば画面の順に案内します。
 
 ```
-seo/data/クエリ.csv を使って、順位を上げやすいクエリを出して
+seo/data/ に置いた Search Console の zip を使って、順位を上げやすいクエリを出して
 ```
 
 ```
@@ -140,30 +140,30 @@ https://example.jp/sitemap.xml で技術監査をして
 
 ## 付属スクリプトは4本。どれも API の認証なしで動く
 
-Search Console を分析する3本は、画面から書き出した CSV を読みます。
+Search Console を分析する3本は、画面から書き出した zip をそのまま読みます。展開した CSV も読めます。
 
 | スクリプト | 読むもの | 出すもの |
 |---|---|---|
 | `audit.py` | サイトマップ（URL かファイル。gzip、1行1URL のテキスト、RSS / Atom でもよい） | ページごとの HTTP ステータス、リダイレクト先、title、meta description、h1 の数、canonical、noindex、本文の分量 |
-| `striking_distance.py` | クエリ.csv かページ.csv | 掲載順位8〜20位で表示回数100回以上の行と、その行の CTR が自サイトの3位以内の実績 CTR まで上がった場合に増えるクリック数の目安 |
-| `low_ctr.py` | クエリ.csv かページ.csv | 掲載順位10位以内・表示回数100回以上で、CTR が自サイトの同じ順位帯の実績の半分に届かない行。title と meta description を見直す候補になる |
-| `decay.py` | 同じ長さの2期間のエクスポート | 前の期間に20クリック以上あり、クリック数が30%以上（10クリック以上）減った行と、原因の当たり（消失・順位低下・需要減・CTR 低下・複合要因） |
+| `striking_distance.py` | Search Console の zip（中のクエリ.csv かページ.csv）か、展開した CSV | 掲載順位8〜20位で表示回数100回以上の行と、その行の CTR が自サイトの3位以内の実績 CTR まで上がった場合に増えるクリック数の目安 |
+| `low_ctr.py` | Search Console の zip（中のクエリ.csv かページ.csv）か、展開した CSV | 掲載順位10位以内・表示回数100回以上で、CTR が自サイトの同じ順位帯の実績の半分に届かない行。title と meta description を見直す候補になる |
+| `decay.py` | 同じ長さの2期間のエクスポート（zip のままでよい） | 前の期間に20クリック以上あり、クリック数が30%以上（10クリック以上）減った行と、原因の当たり（消失・順位低下・需要減・CTR 低下・複合要因） |
 
 `audit.py` は、自社のサイトか、許可を得たサイトにだけ使ってください。既定では1秒おきに1件ずつ取得し、robots.txt に従います。社内ネットワークなどの内部アドレスにはリダイレクト先も含めて接続せず、サイトマップと違うホストの URL も取得しません。ほかのホストへのリダイレクトは、内部アドレスでなければたどります。robots.txt がサーバーエラー・429・タイムアウトなどで取れないときは、RFC 9309 と Google の仕様に合わせて、その robots.txt が対象とするページを取得せず、`BLOCKED:robots-unreachable` として記録します。自社サイトで一時的に取れないだけなら、`--ignore-robots` を付けると続けられます。
 
-自分で動かす場合は、リポジトリのフォルダで次のように実行します（uv を使う例）。Search Console から書き出した CSV は `seo/data/` に置いておきます。スクリプトは出力先のフォルダを作らないので、先に `seo/output/` を作っておきます。オプションはそれぞれ `--help` で確かめられます。
+自分で動かす場合は、リポジトリのフォルダで次のように実行します（uv を使う例）。Search Console から書き出した zip は、そのまま `seo/data/` に置いておきます。スクリプトは出力先のフォルダを作らないので、先に `seo/output/` を作っておきます。オプションはそれぞれ `--help` で確かめられます。
 
 ```bash
 mkdir -p seo/output
 uv run skills/seo-operator/scripts/audit.py https://example.jp/sitemap.xml -o seo/output/audit.csv --limit 500
-uv run skills/seo-operator/scripts/striking_distance.py seo/data/クエリ.csv -o seo/output/striking.csv
+uv run skills/seo-operator/scripts/striking_distance.py seo/data/example.jp-Performance-on-Search-2026-09-27.zip -o seo/output/striking.csv
 ```
 
 ## 動作環境とテスト
 
-2026-09-26 に、macOS の Python 3.9（pandas 2.3）と 3.13（pandas 3.0）で、テスト200件がすべて通ることを確かめました。GitHub Actions でも、main への push と pull request のたびに、Ubuntu の Python 3.9 と 3.13 で同じテストを回します。3.9 では、依存パッケージを requirements.txt の下限の版にそろえた組み合わせでも回します。Python 3.10〜3.12 と Windows では、まだ動かしていません。
+2026-09-28 に、macOS の Python 3.9（pandas 2.3）と 3.13（pandas 3.0）で、テスト243件がすべて通ることを確かめました。GitHub Actions でも、main への push と pull request のたびに、Ubuntu の Python 3.9 と 3.13 で同じテストを回します。3.9 では、依存パッケージを requirements.txt の下限の版にそろえた組み合わせでも回します。Python 3.10〜3.12 と Windows では、まだ動かしていません。
 
-入れておくだけなら、毎回のセッションに加わるのはスキルの説明文（約310字）だけです。`claude plugin details` の推定では約270トークンです。依頼したときは、SKILL.md（約8,000字）と、依頼に合った手順書（多くは1本で1万〜3万字。関係するほかの手順書は必要な節だけ）を読み込みます。
+入れておくだけなら、毎回のセッションに加わるのはスキルの説明文（約310字）だけです。`claude plugin details` の推定では約270トークンです。依頼したときは、SKILL.md（約1万600字）と、依頼に合った手順書（多くは1本で1万〜3万字。関係するほかの手順書は必要な節だけ）を読み込みます。
 
 テストの実行方法と合格の条件は [tests/README.md](tests/README.md) にあります。
 
@@ -183,4 +183,4 @@ MIT ライセンスです（[LICENSE](LICENSE)）。第三者の著作物とラ�
 
 不具合の報告や質問は [Issues](https://github.com/indiabiyori/seo-operator/issues) にお寄せください。
 
-版 1.3.0（最終更新 2026-09-27）。手順書の内容は2026年9月時点のものです。
+版 1.4.0（最終更新 2026-09-27）。手順書の内容は2026年9月時点のものです。

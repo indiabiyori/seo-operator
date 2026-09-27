@@ -9,6 +9,8 @@ import io
 import os
 import subprocess
 import sys
+import tempfile
+import zipfile
 
 HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gsc")
 # 既定の対象は、このリポジトリの skills/seo-operator（環境変数 SEO_OPERATOR_DIR で切り替える）
@@ -53,17 +55,38 @@ CASES = [
 ]
 
 
+def zip_cases(tmp):
+    """gsc/ の CSV を Search Console の zip と同じ名前（クエリ.csv / ページ.csv）で詰め、zip のまま読むケースを返す。"""
+    def pack(name, members):
+        path = os.path.join(tmp, name)
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            for arcname, src in members:
+                with open(os.path.join(HERE, src), "rb") as f:
+                    z.writestr(arcname, f.read())
+        return path
+    cur = pack("example.jp-Performance-on-Search-2026-09-27.zip",
+               [("クエリ.csv", "クエリ.csv"), ("ページ.csv", "ページ_直近3か月.csv")])
+    prev = pack("gsc_前年同期.zip", [("クエリ.csv", "クエリ.csv"), ("ページ.csv", "ページ_前年同期.csv")])
+    return [
+        ("striking zip のまま（auto はクエリ.csv）",) + CASES[0][1:2] + ([cur],) + CASES[0][3:],
+        ("decay zip を 2 つ（--key page）",) + CASES[5][1:2]
+        + (["--current", cur, "--previous", prev, "--key", "page"],) + CASES[5][3:],
+    ]
+
+
 def main():
     print("対象: {}".format(SCRIPTS))
     failed = 0
-    for name, script, args, key, cols, expected in CASES:
-        got = rows(run(script, args), key, *cols)
-        ok = got == expected
-        failed += not ok
-        print("[{}] {}".format("PASS" if ok else "FAIL", name))
-        if not ok:
-            print("  期待: {}\n  実際: {}".format(expected, got))
-    print("{}/{} passed".format(len(CASES) - failed, len(CASES)))
+    with tempfile.TemporaryDirectory() as tmp:
+        cases = CASES + zip_cases(tmp)
+        for name, script, args, key, cols, expected in cases:
+            got = rows(run(script, args), key, *cols)
+            ok = got == expected
+            failed += not ok
+            print("[{}] {}".format("PASS" if ok else "FAIL", name))
+            if not ok:
+                print("  期待: {}\n  実際: {}".format(expected, got))
+    print("{}/{} passed".format(len(cases) - failed, len(cases)))
     return 1 if failed else 0
 
 
