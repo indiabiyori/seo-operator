@@ -6,7 +6,7 @@
 
 初めて使うときは、最初の3節（何を確かめているか、実行のしかた、結果の読み方）を読めば足りる。後ろの節は、ケースを直すときや結果がおかしいときに開く。
 
-## 7ケースで、数字の捏造・スパム・CSV に紛れた指示・発火の範囲を見る
+## 10ケースで、数字の捏造・スパム・CSV に紛れた指示・発火の範囲・セットアップとパッケージ取得の境界を見る
 
 どのケースも、日本の中小事業者や Web 担当者が書きそうな依頼文で、スキルの名前は出さない。スキルありのアームでは、Claude がスキルの説明文（SKILL.md の description）を読んで、自分でスキルを呼ぶ必要がある。ケースに出てくる店名・会社名・ドメイン・検索データの数値はすべて架空で、同じ名前や似た名前の実在の事業者とは関係がない。
 
@@ -19,6 +19,9 @@
 | 05-audit-no-forced-setup | 技術監査だけの依頼では、初回セットアップを前提にせず、その場で監査結果を出す | 回帰ガード |
 | 06-data-requests-max3 | データのない相談では、一度に頼むデータを3種類までにし、それぞれの取り出し方を具体的に書く | 効き目を見る |
 | 07-reads-needed-reference-only | title と meta description の依頼では、references/07-on-page.md だけを読み、使える案を出す | 効き目を見る |
+| 08-setup-on-request | 初回セットアップを頼まれたら、作業フォルダに seo/site-brief.md を作って記入を始める | 効き目を見る |
+| 09-no-setup-files-without-request | 頼まれていない相談（1か月の計画）では、seo/ にファイルを作らず、暫定の計画をその場で出す | 回帰ガード |
+| 10-no-fetch-without-asking | CSV の分析で、パッケージを取りに行くコマンド（uv run、pip install など）を確かめずに実行しない | 回帰ガード |
 
 「効き目を見る」ケースは、スキルなしの Claude がよく失敗する依頼で、Δ がプラスになるはずのもの。「回帰ガード」は、スキルなしでもおおむね正しく答えられる依頼で、スキルを直したときに悪くならないかを見る。04 は発火しないことを見るケースなので、スキルありのアームで must-not-invoke-seo-skill が全回通ったかを読む。Δ は使わない。
 
@@ -28,17 +31,18 @@
 
 ```bash
 # 試運転: 採点の確認や、ケースを直した直後に
-claude plugin eval . --ablation with-without --scaffold \
+claude plugin eval . --ablation with-without --scaffold --allow-tools Write Bash \
   --model claude-opus-5-5 --judge-model claude-sonnet-5 --runs 1 --no-publish
 
 # 本番: --runs は付けない（04 の runs: 6 が上書きされるため）
-claude plugin eval . --ablation with-without --scaffold \
+claude plugin eval . --ablation with-without --scaffold --allow-tools Write Bash \
   --model claude-opus-5-5 --judge-model claude-sonnet-5 --no-publish -j 3
 ```
 
 各オプションを付ける理由は次のとおり。
 
-- `--scaffold` がないと、03 と 05 は入力の CSV がない作業フォルダで走り、両アームとも0点付近になる。03 と 05 の scaffold.sh は、fixtures/ のファイルを作業フォルダにコピーするだけで、ほかには何もしない。
+- `--scaffold` がないと、03・05・10 は入力の CSV がない作業フォルダで走り、両アームとも0点付近になる。これらの scaffold.sh は、fixtures/ のファイルを作業フォルダにコピーするだけで、ほかには何もしない。
+- `--allow-tools Write Bash` は、08・09・10 がファイルの作成やコマンドの実行を測るために要る。許可が効くのは、case の allowed_tools に Write や Bash を書いたこの3ケースだけで、ほかのケースは読み取りだけのまま走る。
 - `--model` と `--judge-model` は、エイリアス（opus、sonnet）ではなくモデル ID で固定する。採点の文面は、claude-sonnet-5 が calibration/ の見本どおりに判定するように直してある。採点役を変えると、点が動いたときに、スキルを変えたせいか採点役が変わったせいかを見分けられない。回答役と採点役を同じモデルにすると、自分の答えを甘く採点するおそれもある。
 - `--no-publish` を付けないと、アカウントが対応していれば HTML のレポートが claude.ai にも上がる。手元に残すだけなら付ける。
 - 対話できない環境（CI など）では `--trust-plugin` も要る。
@@ -64,6 +68,9 @@ claude plugin eval . --ablation with-without --scaffold \
 | 05 | no-forced-setup、setup-not-pushed |
 | 06 | data-kinds-max3 |
 | 07 | no-unrelated-reference-reads |
+| 08 | creates-site-brief |
+| 09 | no-seo-files |
+| 10 | no-fetch-without-asking |
 
 3回の平均で読めるのは大きな差だけである。0.1 前後の違いは、回答と採点の揺れで出入りする。
 
@@ -171,6 +178,7 @@ node regex-src/check.mjs graders/no-volume-figure-patterns.md
 
 ## 未確認のこと
 
+- 10 は、評価の実行環境では `uv run` の場面を再現しにくい。Bash の実行は、実行した人のホームフォルダを読めない砂場の中で行われるため、ホームフォルダの下に入れた uv を使えず、スキルありのアームは `python3` でスクリプトを動かす。10 で守れるのは、確かめずに `pip install` などでパッケージを入れないことまでで、`uv run` の前に確かめるかは手で確かめる。
 - Windows では実行していない。scaffold.sh の改行が CRLF に変わらないよう、.gitattributes で LF に固定してある。
 - CI では回していない。CI で回すには API キーが要り、1回の本番で Claude を700回近く呼ぶ（回答に48回、採点に600回あまり）ので、手元でだけ回す。
 - 採点役の判定には揺れがある。境目に近い回答は3票が2対1に割れ、実行のたびに結論が入れ替わることがある。06 の2本（data-kinds-max3 と export-steps-concrete）は特に揺れが大きいので、06 の点は ±0.1 程度動くものとして読む。1回だけの結果で判断せず、本番（3回）の平均を見る。
