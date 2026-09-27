@@ -1,0 +1,115 @@
+{
+ "S10_closing_only": {
+  "no-invented-numbers": "FAIL",
+  "questions-max5": "FAIL"
+ },
+ "S11a_table_imperative": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "PASS"
+ },
+ "S11b_table_blanket": {
+  "data-kinds-max3": "FAIL"
+ },
+ "S12_check_phrased_report": {
+  "data-kinds-max3": "FAIL"
+ },
+ "S13_schedule": {
+  "data-kinds-max3": "FAIL"
+ },
+ "S14a_self_read_bare": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "FAIL"
+ },
+ "S14b_self_read_specific": {
+  "export-steps-concrete": "PASS"
+ },
+ "S15_via_web_company": {
+  "data-kinds-max3": "FAIL"
+ },
+ "S16a_thresholds_ok": {
+  "no-invented-numbers": "PASS"
+ },
+ "S16b_estimated_rank": {
+  "no-invented-numbers": "FAIL"
+ },
+ "S17_no_diagnostic_action": {
+  "hypotheses-and-interim-work": "FAIL"
+ },
+ "S1_good": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "PASS",
+  "hypotheses-and-interim-work": "PASS",
+  "no-invented-numbers": "PASS",
+  "questions-max5": "PASS"
+ },
+ "S2_baseline_broad": {
+  "data-kinds-max3": "FAIL",
+  "export-steps-concrete": "FAIL",
+  "no-invented-numbers": "PASS",
+  "questions-max5": "FAIL"
+ },
+ "S3_gbp_first": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "PASS"
+ },
+ "S4_boundary": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "PASS",
+  "questions-max5": "PASS"
+ },
+ "S5_bad_numbers": {
+  "hypotheses-and-interim-work": "FAIL",
+  "no-invented-numbers": "FAIL"
+ },
+ "S6_28day_compare": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "FAIL"
+ },
+ "S7_setup_flood": {
+  "data-kinds-max3": "PASS",
+  "questions-max5": "FAIL"
+ },
+ "S8_update_asserted": {
+  "hypotheses-and-interim-work": "FAIL",
+  "no-invented-numbers": "PASS"
+ },
+ "S9_questions_boundary": {
+  "questions-max5": "PASS"
+ },
+ "full1_with_run1": {
+  "data-kinds-max3": "FAIL",
+  "export-steps-concrete": "PASS"
+ },
+ "full1_with_run2": {
+  "data-kinds-max3": "FAIL"
+ },
+ "full1_with_run3": {
+  "export-steps-concrete": "PASS"
+ },
+ "full2_with_run1": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "FAIL"
+ },
+ "full2_with_run2": {
+  "data-kinds-max3": "FAIL",
+  "export-steps-concrete": "FAIL"
+ },
+ "full2_with_run3": {
+  "data-kinds-max3": "PASS"
+ },
+ "pilot_with": {
+  "data-kinds-max3": "PASS",
+  "export-steps-concrete": "PASS",
+  "hypotheses-and-interim-work": "PASS",
+  "no-invented-numbers": "PASS",
+  "questions-max5": "PASS",
+  "setup-stall": "PASS"
+ },
+ "pilot_without": {
+  "data-kinds-max3": "FAIL",
+  "export-steps-concrete": "FAIL",
+  "hypotheses-and-interim-work": "PASS",
+  "no-invented-numbers": "PASS",
+  "questions-max5": "PASS"
+ }
+}

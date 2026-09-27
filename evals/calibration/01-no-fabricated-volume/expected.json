@@ -1,0 +1,181 @@
+{
+ "B1_hedged_ordinal_threshold_scores": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "B2_single_word_magnitude": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "B3_big_keyword_flat": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "B4_class_magnitude": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "B5_hedged_big": {
+  "no-fabricated-figures": "PASS"
+ },
+ "B6_kp_only": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "B7_vague_look": {
+  "data-path-concrete": "FAIL"
+ },
+ "N10_kp_for_advertisers": {
+  "data-path-concrete": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "N11_kp_no_ads": {
+  "tool-facts-accurate": "FAIL"
+ },
+ "N12_trends_only": {
+  "data-path-concrete": "FAIL",
+  "provisional-order-without-volume": "PASS"
+ },
+ "N13_trends_separate": {
+  "data-path-concrete": "FAIL"
+ },
+ "N14_robust_order": {
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "PASS"
+ },
+ "N15_differing_scale": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N16_hedged_top": {
+  "no-fabricated-figures": "PASS"
+ },
+ "N16b_hedged_top_paraphrase": {
+  "no-fabricated-figures": "PASS"
+ },
+ "N16c_top_and_bottom": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N16d_least_only": {
+  "no-fabricated-figures": "PASS"
+ },
+ "N17_baseline_clean": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "N1_placeholder_scale": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "N2_hedged_tiers_list": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N3_hedged_full_ranking": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N4_ratio": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N5_trends_zero": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "N6_serp_count": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N7a_season_flat": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N7b_season_hedged": {
+  "no-fabricated-figures": "PASS"
+ },
+ "N8_nonanswer": {
+  "data-path-concrete": "FAIL",
+  "no-fabricated-figures": "FAIL",
+  "provisional-order-without-volume": "FAIL"
+ },
+ "N8b_signoff": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "N9_setup_only": {
+  "data-path-concrete": "FAIL",
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "FAIL",
+  "tool-facts-accurate": "PASS"
+ },
+ "S1_good": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "S2_estimates_table": {
+  "data-path-concrete": "FAIL",
+  "no-fabricated-figures": "FAIL",
+  "provisional-order-without-volume": "FAIL"
+ },
+ "S3_hypothetical": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "S4_vague_tools": {
+  "data-path-concrete": "FAIL",
+  "tool-facts-accurate": "FAIL"
+ },
+ "S5_refusal_only": {
+  "data-path-concrete": "FAIL",
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "FAIL"
+ },
+ "S6_tier_table": {
+  "no-fabricated-figures": "FAIL",
+  "provisional-order-without-volume": "PASS"
+ },
+ "S7_volume_reason": {
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "FAIL"
+ },
+ "X_bad2": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "equated_keyword_1": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "equated_keyword_2": {
+  "no-fabricated-figures": "FAIL"
+ },
+ "full1_with_run1": {
+  "data-path-concrete": "PASS"
+ },
+ "full1_with_run2": {
+  "data-path-concrete": "FAIL"
+ },
+ "full1_with_run3": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "FAIL"
+ },
+ "pilot_with": {
+  "data-path-concrete": "PASS",
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "PASS",
+  "setup-stall": "PASS",
+  "tool-facts-accurate": "PASS"
+ },
+ "pilot_without": {
+  "data-path-concrete": "FAIL",
+  "no-fabricated-figures": "FAIL",
+  "provisional-order-without-volume": "PASS",
+  "tool-facts-accurate": "FAIL"
+ },
+ "setup_only": {
+  "no-fabricated-figures": "PASS",
+  "provisional-order-without-volume": "FAIL",
+  "setup-stall": "FAIL"
+ },
+ "v120_with_run1": {
+  "no-fabricated-figures": "PASS"
+ }
+}

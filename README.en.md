@@ -44,7 +44,7 @@ cp -R seo-operator/skills/seo-operator ~/.claude/skills/
 
 On claude.ai (web or Cowork), zip the `skills/seo-operator` folder so that `seo-operator` is at the top of the zip, turn on "Code execution and file creation" in Settings → Capabilities, and upload the zip in Customize → Skills → "+" → "+ Create skill" → "Upload a skill".
 
-The scripts need Python 3.9 or later with requests, beautifulsoup4, and pandas. With [uv](https://docs.astral.sh/uv/), running a script with `uv run` installs them automatically from the metadata at the top of each script, and the skill tells Claude to do so. Otherwise, create a virtual environment and run `pip install -r skills/seo-operator/requirements.txt` in it; Homebrew and many Linux system Pythons refuse a system-wide `pip install`. If a package is missing, the script prints how to install it.
+The scripts need Python 3.9 or later with requests, beautifulsoup4, and pandas. With [uv](https://docs.astral.sh/uv/), running a script with `uv run` installs them automatically from the metadata at the top of each script. When the packages are not on your machine yet, Claude asks before downloading them. Otherwise, create a virtual environment and run `pip install -r skills/seo-operator/requirements.txt` in it; Homebrew and many Linux system Pythons refuse a system-wide `pip install`. If a package is missing, the script prints how to install it.
 
 To update a plugin install, run `claude plugin marketplace update seo-operator` and `claude plugin update seo-operator@seo-operator`, then restart Claude Code.
 
@@ -58,16 +58,18 @@ Use `audit.py` only on your own sites or sites you have permission to crawl. By 
 
 ## Tests
 
-All 200 regression tests passed on macOS with Python 3.9 + pandas 2.3 and Python 3.13 + pandas 3.0 (2026-09-26). GitHub Actions runs the same tests on Ubuntu with Python 3.9 and 3.13 on every push to main and every pull request. See [tests/README.md](tests/README.md) (in Japanese) for how to run them.
+All 200 regression tests passed on macOS with Python 3.9 + pandas 2.3 and Python 3.13 + pandas 3.0 (2026-09-26). GitHub Actions runs the same tests on Ubuntu with Python 3.9 and 3.13 on every push to main and every pull request, and also on Python 3.9 with each dependency at the lowest version that requirements.txt allows. See [tests/README.md](tests/README.md) (in Japanese) for how to run them.
+
+The behavior evals in [evals/](evals/README.md) (in Japanese) measure how Claude answers. There are ten scenarios, each run three times with the skill and three times without it (six times each for the proofreading scenario), and each run is scored from 0 to 1. They check, for example, that Claude does not invent search volumes, that it flags spam-policy risk when asked to mass-produce landing pages that differ only in the prefecture name, that it ignores instructions hidden in a CSV, that the skill stays out of proofreading that has nothing to do with SEO, and that it does not create files or download packages nobody asked for. In the 2026-09-27 run of version 1.2.0, Claude with the skill scored full marks in all ten scenarios. Five of them check that the skill does not make things worse, and also scored full marks without it. The largest gains were on the search-volume request (1.00 with the skill, 0.29 without) and on the request to run the first-time setup (1.00 and 0.33). The scenario that asks for at most three kinds of data scored 0.70 in version 1.1.0 and 1.00 now. Each scenario ran only three times, so only large differences are meaningful.
 
 ## Limitations
 
 - It cannot provide actual search volumes or keyword difficulty. Give it an Ahrefs or Semrush export, or use Google Trends for relative comparisons.
 - It assumes a Japanese-language site. Character-count targets for titles and descriptions, notation variants, and legal checks (such as Japan's rules on stealth marketing) follow Japanese conventions and law.
-- The ground rules are instructions in SKILL.md. Claude's responses themselves are not tested, so ask where a number came from if its source is unclear.
+- The ground rules are only instructions in SKILL.md, so Claude does not always follow them. The evals made the rough search-volume request six times with the skill and six times without, across two full runs. With the skill, one answer gave numbers: while explaining why it would not estimate, it attached example figures to the keywords (first run; none of the three answers in the second run did). Without the skill, all six answers gave numbers. Ask where a number came from if its source is unclear.
 
 ## License and attribution
 
-MIT (see [LICENSE](LICENSE)). Parts of the playbooks in `skills/seo-operator/references/` summarize and adapt [Google Search Central documentation](https://developers.google.com/search/docs), which Google publishes under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with code samples under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+MIT (see [LICENSE](LICENSE)). Parts of the playbooks in `skills/seo-operator/references/` summarize and adapt [Google Search Central documentation](https://developers.google.com/search/docs), which Google publishes under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), with code samples under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party works and licenses.
 
-Version 1.1.0 (last updated 2026-09-26).
+Version 1.2.0 (last updated 2026-09-27).

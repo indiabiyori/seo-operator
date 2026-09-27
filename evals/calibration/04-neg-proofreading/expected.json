@@ -1,0 +1,71 @@
+{
+ "S01_keigo_k1_missed": {
+  "fixes-keigo": "FAIL",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "PASS"
+ },
+ "S02_title_meta_keyword": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "FAIL",
+  "stays-in-scope": "PASS"
+ },
+ "S03_voice_guide_note": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "FAIL",
+  "stays-in-scope": "PASS"
+ },
+ "S04_gbp_accuracy": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "PASS"
+ },
+ "S05_gbp_visibility": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "FAIL",
+  "stays-in-scope": "PASS"
+ },
+ "S06_one_extra_plus_scope": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "PASS"
+ },
+ "S07_two_extra": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "FAIL"
+ },
+ "S08_deletes_sate": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "FAIL"
+ },
+ "S09_adds_greeting_and_slot": {
+  "fixes-keigo": "PASS",
+  "stays-in-scope": "FAIL"
+ },
+ "S10_alt_rewrite": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "FAIL"
+ },
+ "S11_ai_tone_reason": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "FAIL"
+ },
+ "S12_questions_only": {
+  "fixes-keigo": "FAIL",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "FAIL"
+ },
+ "pilot_with": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "PASS"
+ },
+ "pilot_without": {
+  "fixes-keigo": "PASS",
+  "no-seo-advice": "PASS",
+  "stays-in-scope": "PASS"
+ }
+}

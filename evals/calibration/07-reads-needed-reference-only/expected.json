@@ -1,0 +1,96 @@
+{
+ "A_good": {
+  "no-invented-claims": "PASS",
+  "per-proposal-counts": "PASS"
+ },
+ "A_nodesccounts": {
+  "per-proposal-counts": "FAIL"
+ },
+ "A_sepcounts": {
+  "per-proposal-counts": "PASS"
+ },
+ "C_invented": {
+  "no-invented-claims": "FAIL"
+ },
+ "F_shared_counts": {
+  "per-proposal-counts": "FAIL"
+ },
+ "H_haiku_with": {
+  "no-invented-claims": "PASS",
+  "per-proposal-counts": "PASS"
+ },
+ "I_haiku_without": {
+  "per-proposal-counts": "FAIL"
+ },
+ "J_number": {
+  "no-invented-claims": "FAIL"
+ },
+ "K_topic": {
+  "no-invented-claims": "FAIL"
+ },
+ "closing_only": {
+  "length-targets": "FAIL",
+  "no-invented-claims": "FAIL",
+  "per-proposal-counts": "FAIL",
+  "proposals-complete": "FAIL",
+  "setup-stall": "PASS",
+  "year-not-stale": "FAIL"
+ },
+ "desc_check_with": {
+  "no-invented-claims": "PASS"
+ },
+ "full1_with_run2": {
+  "no-invented-claims": "PASS",
+  "year-not-stale": "PASS"
+ },
+ "full1_with_run3": {
+  "year-not-stale": "PASS"
+ },
+ "full1_without_run1": {
+  "no-invented-claims": "PASS"
+ },
+ "full1_without_run2": {
+  "no-invented-claims": "PASS"
+ },
+ "full1_without_run3": {
+  "length-targets": "PASS",
+  "no-invented-claims": "PASS"
+ },
+ "opus_with": {
+  "length-targets": "PASS",
+  "no-invented-claims": "PASS",
+  "per-proposal-counts": "PASS",
+  "proposals-complete": "PASS",
+  "year-not-stale": "PASS"
+ },
+ "opus_without": {
+  "length-targets": "FAIL",
+  "no-invented-claims": "FAIL",
+  "per-proposal-counts": "FAIL",
+  "proposals-complete": "PASS",
+  "year-not-stale": "FAIL"
+ },
+ "pilot_with": {
+  "length-targets": "PASS",
+  "no-invented-claims": "PASS",
+  "per-proposal-counts": "PASS",
+  "proposals-complete": "PASS",
+  "setup-stall": "PASS",
+  "year-not-stale": "PASS"
+ },
+ "pilot_without": {
+  "length-targets": "PASS",
+  "no-invented-claims": "PASS",
+  "per-proposal-counts": "FAIL",
+  "proposals-complete": "PASS",
+  "year-not-stale": "FAIL"
+ },
+ "setup_only": {
+  "length-targets": "FAIL",
+  "no-invented-claims": "FAIL",
+  "per-proposal-counts": "FAIL",
+  "proposals-complete": "FAIL",
+  "setup-stall": "FAIL",
+  "year-not-stale": "FAIL"
+ }
+}

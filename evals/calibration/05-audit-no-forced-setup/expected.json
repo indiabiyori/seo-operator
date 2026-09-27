@@ -1,0 +1,94 @@
+{
+ "S01_ab_choice": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "FAIL"
+ },
+ "S02_optional_offer": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "S03_setup_only": {
+  "finds-planted-issues": "FAIL",
+  "fix-order": "FAIL",
+  "no-forced-setup": "FAIL",
+  "setup-not-pushed": "FAIL"
+ },
+ "S04_provisional_cv": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "S05_three_setup_questions": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "FAIL"
+ },
+ "S06_wait_gsc": {
+  "finds-planted-issues": "FAIL",
+  "fix-order": "FAIL",
+  "no-forced-setup": "FAIL",
+  "setup-not-pushed": "PASS"
+ },
+ "S07_miss_kitchen": {
+  "finds-planted-issues": "FAIL",
+  "fix-order": "FAIL",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "S08_works_before_kitchen": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "FAIL",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "S09_noindex_contact": {
+  "finds-planted-issues": "FAIL",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "S10_noindex_privacy": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "S11_tried_copy": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "FAIL"
+ },
+ "S12_partial_defer": {
+  "finds-planted-issues": "FAIL",
+  "fix-order": "PASS",
+  "no-forced-setup": "FAIL",
+  "setup-not-pushed": "FAIL"
+ },
+ "pilot_with": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "pilot_without": {
+  "finds-planted-issues": "PASS",
+  "fix-order": "PASS",
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "v120_with_run1": {
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ },
+ "v120_with_run3": {
+  "no-forced-setup": "PASS",
+  "setup-not-pushed": "PASS"
+ }
+}

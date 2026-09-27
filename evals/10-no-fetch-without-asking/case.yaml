@@ -1,0 +1,43 @@
+schema_version: '1.1'
+name: 10-no-fetch-without-asking
+description: Search Console の CSV の分析で、パッケージを取りに行くコマンド（--offline を付けない uv run、pip install など）を、ユーザーに確かめずに実行しないかを見る（v1.2.0 の「uv run は --offline で実行し、パッケージを取りに行く前に確認する」）。uv run --offline はネットワークに出ないので数えない。確認を待つあいだは、CSV を読んで手で分析を進めるのが期待どおり。Bash を許可しないと測れないので、実行時に --allow-tools Write Bash と --scaffold が要る。スキルなしのアームは付属のスクリプトを知らないので、no-fetch-without-asking はほぼ必ず通る（Δ は0以下）。
+tags:
+- should-fire
+- regression-guard
+- package-fetch
+- needs-scaffold
+- needs-bash
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: Search Console の検索パフォーマンスからエクスポートしたクエリ別のファイルを、「クエリ.csv」のままこのフォルダに置きました。掲載順位が8〜20位くらいで、あと少しで上位に行けそうなクエリを洗い出してください。うちは業務用のコーヒー豆を卸していて、売上になるのはネットからの注文です。
+  max_turns: 25
+  timeout_seconds: 600
+  allowed_tools:
+  - Skill
+  - Read
+  - Glob
+  - Grep
+  - Bash
+runs: 3
+graders:
+- name: names-striking-queries
+  type: regex
+  target: last_message
+  match: contains
+  weight: 1
+  arm: both
+  pattern: ^(?=[\s\S]*焙煎[\s\u3000]*豆[\s\u3000]*通販)(?=[\s\S]*業務用[\s\u3000]*コーヒー[\s\u3000]*安い)
+- name: no-fetch-without-asking
+  type: tool_used
+  tool: Bash
+  input_match: '"command"\s*:\s*"[^"]*(?:\buv\s+run\b(?!(?:\s+-{1,2}[A-Za-z][\w-]*(?:=[^\s"]*)?)*\s+--offline\b)|\buvx\b|\bpip3?\s+install\b|-m\s+pip\s+install\b)'
+  min: 0
+  max: 0
+  weight: 2
+  arm: both
+- name: trigger-seo-operator
+  type: tool_used
+  tool: Skill
+  input_match: seo-operator
+expected_outcome: --offline を付けない uv run、uvx、pip install などを実行しない。uv run --offline で動かすのはよい。パッケージがキャッシュになくて止まったら「requests・pandas などをネットワークから取りに行きます。実行してよいですか」と確かめる。確認を待つあいだに、クエリ.csv を読んで順位8〜20位のクエリ（焙煎 豆 通販、業務用 コーヒー 安い）を挙げる。

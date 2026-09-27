@@ -1,0 +1,147 @@
+schema_version: "1.1"
+name: 05-audit-no-forced-setup
+description: >-
+  技術監査だけの依頼（クロール結果の audit.csv。サイトマップの19 URL に6つの問題を仕込んである）で、初回セットアップ（seo/site-brief.md、seo/voice-guide.md、セットアップの質問）を前提にせず、URL ごとの問題・直し方・直す順番を今回の回答で出すかを見る。CV の定義がないので優先度は暫定だと書くことや、セットアップを任意の次の一手として勧めることは問題ない。回帰ガードのケースで、スキルなしのモデルにはセットアップの考え方がないため、Δ は0付近になる。with アームの絶対スコアを読み、trigger-seo-operator が通った回だけを信用する（発火しなかった回はスキルなしと同じ条件で走っている）。setup-not-pushed（頼まれていないセットアップを始めないこと）も点に入る。スキルなしのアームは必ず通るので、v1.2.0 の「頼まれたときだけセットアップを始める」ができていないと、Δ が負になって表に出る。実行には --scaffold が要る（scaffold.sh が fixtures/audit.csv を作業フォルダにコピーする）。付けないと両アームとも0点付近になる。no-forced-setup は、セットアップ以外の理由（クロールのログや Search Console のデータ待ち）で結果を出さない回答も FAIL にするので、落ちたときは最終回答を読んで理由を確かめる。Write を許可していないのは、seo/ に作られたファイルがセットアップのものか、スキルが保存した報告かを区別できないため。ユーザーの「記事の中身やキーワードの話はいらない」という条件は採点していない。
+tags: [should-fire, regression-guard, needs-scaffold, setup-gate, technical-audit]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    世田谷で住宅リフォームの会社をやっていて、自社サイトの更新も自分でしています。
+    サイトマップに載っているページを全部クロールして、結果をこのフォルダの audit.csv に書き出しました。開いてはみたものの、見方がわかりません。
+
+    見てほしいのは技術的なSEOの問題だけです。インデックスまわりの設定や、title・meta description の抜けや重複など。記事の中身やキーワード選びの話は、今回はいりません。
+
+    どのURLに何の問題があって、どう直せばいいのか。うちにとって大事なページから手をつけたいので、直す順番もわかるようにまとめてください。お願いします。
+  max_turns: 25
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill]
+runs: 3
+expected_outcome: >-
+  両アームとも audit.csv を読み、URL ごとの問題、直し方、直す順番を同じ回答で出す。/service/kitchen/ の noindex と、トップページを指している /service/bathroom/ の canonical を、/price/ の meta description の抜けより先に置く。noindex を、/works/ の事例ページ3件の title の重複より後ろにしない。サイトマップに残っている 404 の /campaign/2025-summer/ と、リダイレクトしている /flow.html の順番は問わない。with アームは、CV の定義がないので優先度は暫定だと書いてよく、CV がわかったら確定すると書いてもよく、セットアップを申し出てもよい。ただし、監査結果・直し方・順番をセットアップの後に回してはいけない。スコアに入るグレーダーは両アームとも通る見込みで、Δ は0付近。setup-not-pushed は、v1.2.0 より前のスキル（サイト情報の記入方法を選ばせる）では with アームで落ちることがあり、v1.2.0 の後は通る見込み。落ちると Δ は負になる。
+graders:
+  - type: tool_used
+    name: trigger-seo-operator
+    tool: Skill
+    input_match: seo-operator
+
+  - type: regex
+    name: names-critical-urls
+    target: last_message
+    match: contains
+    flags: i
+    pattern: '^(?=[\s\S]*(?:(?<![-\w])kitchen(?![-\w])[\s\S]{0,300}noindex|noindex[\s\S]{0,300}(?<![-\w])kitchen(?![-\w])))(?=[\s\S]*(?:(?<![-\w])bathroom(?![-\w])[\s\S]{0,300}(?:canonical|カノニカル|正規)|(?:canonical|カノニカル|正規)[\s\S]{0,300}(?<![-\w])bathroom(?![-\w])))'
+    weight: 0.5
+    arm: both
+
+  - type: llm
+    name: no-forced-setup
+    focus: last_message
+    weight: 2
+    arm: both
+    criteria: |
+      Context: a Japanese home-renovation company owner put a crawl export (audit.csv, one row per sitemap URL) in the working folder and asked ONLY for a technical SEO check (indexing settings, title / meta description gaps and duplicates; explicitly no content or keyword talk): which URL has which problem, how to fix it, and in what order, starting from the pages that matter most to the business. The user gave no conversion (CV) definition, no list of key pages, no site brief and no style guide.
+
+      Question: did the reply deliver the audit now, without making an initial "setup" a precondition? "Setup" means any of: creating or filling in a site brief (for example seo/site-brief.md) or a voice / style guide (for example seo/voice-guide.md), choosing how to fill them in (for example "A: fill it in yourself / B: answer my questions"), or answering a questionnaire about the business (business model, CV definition, target customers, key pages, competitors, legal constraints, tone).
+
+      PASS only if both hold:
+      1. The reply itself contains at least three distinct findings tied to specific URLs or paths from the site (for example /service/kitchen/, /price/), each with how to fix it. A fix direction is enough (for example "remove the noindex", "give each page its own title"); the exact replacement text is not needed. A teaser, a count of issues, or a list of issue types without URLs does not satisfy this.
+      2. None of the FAIL patterns below occurs.
+
+      FAIL if any of these occurs:
+      a. The reply mainly asks setup questions, or asks the user to fill in (or choose how to fill in) a site brief or voice guide, and does not give URL-level findings with fixes in this reply.
+      b. The reply leaves out the findings, the fixes, or any fix order at all (not even a provisional one), and says it will give them only after setup is done or after the user answers questions (for example 「セットアップが済んでから監査します」, or 「回答をもとに優先順位をまとめます」 with no order given in this reply).
+      c. The reply shows only part of the findings and defers the rest, or defers the fixes, until setup questions are answered.
+      d. The reply states that a voice guide or tone / style guide is needed before the findings, or before the noindex / canonical / sitemap fixes, can be given or started.
+      e. The reply tells the user to wait, or not to start any fix, until setup is done.
+
+      NOT failures (if condition 1 holds and a-e do not occur, these are PASS):
+      - Saying the priorities or impact scores are provisional (暫定) because the CV definition or the key pages are unknown, including placeholders such as [要追加: CVの定義].
+      - Giving a provisional order in this reply and saying it will be re-scored or finalised once the CV definition, the key pages or the site brief are known (for example 「CVの定義がわかれば優先度を確定します」).
+      - Mentioning that a site brief would normally be used, while proceeding with the audit anyway.
+      - Offering the initial setup (site brief, voice guide) as an optional or later step, for example for future strategy or content work.
+      - Starting or requesting setup in the same reply alongside the complete audit (for example asking the user to choose A/B for filling in the site brief, listing up to five setup questions, or saying the seo/ templates would be copied or could not be copied), provided the findings, the fixes and a (provisional) order are all in this reply and no fix is made to wait for setup. Whether setup should be raised at all is judged elsewhere.
+      - Saying the concrete replacement title / meta description wording will be drafted later, or after a voice / style guide exists, provided each problem, its URL and the fix direction (for example give each /works/ page its own title, write a description for /price/) are in this reply and the index fixes (noindex, canonical, sitemap) are not made to wait.
+      - Ending with a few questions to refine the priorities (for example which page brings the most inquiries), as long as the findings and fixes are already in this reply.
+      - Asking for more data for further checks (the crawler's console log, the Search Console page indexing report, robots.txt, GA4), as long as findings from audit.csv are already given.
+      - Not mentioning setup at all, or saying it could not create or save files.
+
+      Judge only whether the audit was delivered in this reply and whether setup was made a precondition. Whether each finding is correct or complete is graded elsewhere; do not fail this grader for a wrong or missing individual finding. If the reply withholds the findings for a reason other than setup (for example it waits for a crawl log or Search Console data), condition 1 is not met, so it is a FAIL.
+
+  - type: llm
+    name: finds-planted-issues
+    focus: last_message
+    weight: 1
+    arm: both
+    criteria: |
+      Question: does the reply give a fix for the planted problems of the user's audit.csv (at least five of the six below, including both 1 and 2) without recommending that a normal page be removed from the index?
+
+      Judge only the audit findings. Setup talk anywhere in the reply never affects this grader, whatever it asks or proposes: a site brief or voice guide, 「A: ご自身で記入する / B: 私が質問して埋める」, 「どちらにするか教えていただければ、そこから進めます」, 「雛形をコピーしようとしましたが書き込めませんでした」, an offer for later. Setup is graded elsewhere.
+
+      The six planted problems (full URLs or bare paths both count):
+      1. /service/kitchen/ has noindex. Fix: remove the noindex (checking first whether it was intentional is fine).
+      2. /service/bathroom/ has a canonical pointing to the top page. Fix: point the canonical at the page's own URL, or remove it.
+      3. /campaign/2025-summer/ is 404 but listed in the sitemap. Fix: remove it from the sitemap, or 301-redirect it, or return 410.
+      4. /flow.html redirects (301) to /flow/ but the sitemap lists /flow.html. Fix: list /flow/ in the sitemap instead.
+      5. The three /works/ case-study pages (/works/setagaya-kitchen/, /works/nerima-bathroom/, /works/suginami-exterior/) share the title 施工事例｜ひだまりリフォーム. Fix: a unique title per page.
+      6. /price/ has an empty meta description. Fix: write one for the page.
+
+      An item is found when the reply names it and gives its fix. It is not found when the reply names the problem but withholds its fix (for example 「残りの4件の直し方は、サイト情報を整理してからお伝えします」), or only says to request indexing. A closing request or question that comes after the fixes have been given does not withhold them.
+
+      Answer FAIL only if one of these holds:
+      a. Item 1 or item 2 is not found.
+      b. Fewer than five of the six items are found.
+      c. You can quote a passage recommending noindex, a canonical to another URL, a robots.txt block, merging or deletion for one of these live pages: the top page, /service/…, /works/…, /price/, /flow/, /about/, /faq/, /contact/, /column/… (for example 「お問い合わせページに noindex を付ける」). /privacy/ is exempt.
+      Otherwise answer PASS.
+
+      These never affect this grader either: requests for more data; extra minor issues; provisional priorities; noindex for /privacy/; removing the 404 or /flow.html from the sitemap; summary lines such as 「title の抜けも、meta description の重複もありません」.
+      This counts as PASS: a reply with a fix table covering all six problems and a fix for each, which then ends with 「今回の順番は暫定なので、サイト情報のファイルを用意させてください。A か B を選んでください。どちらにするか教えていただければ、そこから進めます」.
+
+  - type: llm
+    name: fix-order
+    focus: last_message
+    weight: 1
+    arm: both
+    criteria: |
+      Question: in the fix order the reply gives, are problems A and B ahead of C, and is A not behind D?
+
+      A. /service/kitchen/ has noindex.
+      B. /service/bathroom/ has a canonical pointing to the top page.
+      C. /price/ has no meta description.
+      D. The three /works/ case-study pages share one title.
+
+      Reading the order: use what the reply presents as the fix order or priority (a priority table, a numbered 直す順番 / 対応順, numbered sections, or tiers such as 最優先 / 高 / 中 / 低). Ignore listings organised by check item or by URL unless there is no other order. A separate quick-wins box (すぐ済むもの, ついでに) is not a higher tier. X is ahead of Y if X is in a higher tier; in the same tier or with no tiers, if X has a higher priority value (the value the reply sorts by, not effect or effort alone); otherwise if X comes earlier. For A versus D, a shared tier or an equal value is not behind.
+
+      Answer FAIL only if one of these holds:
+      1. The reply gives no fix order at all (for example it only asks questions or asks for data, and says the order will come later).
+      2. A or B is not mentioned.
+      3. You can quote an ordering in which C is ahead of A or of B.
+      4. You can quote an ordering in which D is ahead of A (for example D 最優先 and A 高).
+      5. The reply gives two fix orders that contradict each other on 3 or 4.
+      Otherwise answer PASS.
+
+      This counts as PASS: an order that covers only A and B (for example 「1. /service/kitchen/ の noindex を外す（最優先）」「2. /service/bathroom/ の canonical を直す」) while the other fixes are deferred or missing; C or D not mentioned; priorities called provisional (暫定). Ignore where the 404 and /flow.html are placed, where B stands relative to D, and whether the findings are correct.
+
+  - type: llm
+    name: setup-not-pushed
+    focus: last_message
+    weight: 1
+    arm: both
+    criteria: |
+      Question: did the reply push an initial setup on the user, who asked only for a technical SEO check of a crawl export (audit.csv) and did not ask for any setup?
+
+      "Setup" means a site brief (for example seo/site-brief.md), a voice / style guide (for example seo/voice-guide.md), or a questionnaire about the business.
+
+      Answer FAIL only if you can quote a passage that does one of these:
+      a. Asks the user to choose how to fill in a site brief or style guide (for example 「A: ご自身で記入する / B: 私が質問して埋める」).
+      b. Lists three or more questions about the business for the user to answer (for example CV definition, main services, target customers, competitors).
+      c. Says it created, copied or tried to create setup files (for example 「seo/ に雛形をコピーしようとしましたが書き込めませんでした」), or that it will create them now.
+      Otherwise answer PASS.
+
+      These count as PASS:
+      - No mention of setup.
+      - An optional offer for later, for example 「今後、記事や集客まで進めるときは事業内容を1枚にまとめておくと優先度を正確に決められます。今回の修正には必要ありません」.
+      - A closing offer that names the site brief file and what it would settle, and leaves the choice to the user, for example 「「主なお問い合わせの経路」と「特に力を入れたい工事」を `seo/site-brief.md` にまとめておけば、次回から優先度を確定できます。必要でしたら、質問しながら一緒に作ります」. Offering to create the file if the user wants is not item c.
+      - Saying the order is provisional until the CV definition is known, including a placeholder, for example 「[要追加: CVの定義と、問い合わせの多いサービス] がわかれば順番を確定します」 or 「CV の定義がそろえば順番を確定できます」.
+      - One or two short questions to refine the priorities.
+      - Requests for technical data (Search Console reports, crawl messages, robots.txt), even as several [要追加: …] placeholders. These are not questions about the business.
