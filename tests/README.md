@@ -17,7 +17,7 @@ python3 smoke/check_gsc.py      # 手早い確認。6件・数秒
 python3 smoke/check_nodeps.py   # パッケージがない環境での挙動。14件・数秒
 python3 gsc/run_tests.py        # GSC 系3本の全テスト。137件・30秒ほど
 python3 audit/verify_audit.py   # audit.py の全テスト。43件・1分ほど
-python3 meta/check_repo.py      # リポジトリの整合（manifest・版・依存の範囲・相対リンク）。11件・数秒
+python3 meta/check_repo.py      # リポジトリの整合（manifest・版・依存の範囲・鉄則の写し・相対リンク）。12件・数秒
 ```
 
 最後の行が `6/6 passed`、`14/14 passed`、`合計 137 件、失敗 0 件`、`43/43 passed`、`11/11 passed` なら合格。audit.py のテストは 127.0.0.1 にテスト用のサーバーを立てるため、中で `--allow-private` を付けて実行している。

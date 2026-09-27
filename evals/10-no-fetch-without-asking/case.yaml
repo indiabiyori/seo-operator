@@ -1,6 +1,6 @@
 schema_version: '1.1'
 name: 10-no-fetch-without-asking
-description: Search Console の CSV の分析で、パッケージを取りに行くコマンド（uv run、pip install など）を、ユーザーに確かめずに実行しないかを見る（v1.2.0 の「uv run でパッケージを初めて取りに行く前に確認する」）。確認を待つあいだは、CSV を読んで手で分析を進めるのが期待どおり。Bash を許可しないと測れないので、実行時に --allow-tools Write Bash と --scaffold が要る。スキルなしのアームは付属のスクリプトを知らないので、no-fetch-without-asking はほぼ必ず通る（Δ は0以下）。
+description: Search Console の CSV の分析で、パッケージを取りに行くコマンド（--offline を付けない uv run、pip install など）を、ユーザーに確かめずに実行しないかを見る（v1.2.0 の「uv run は --offline で実行し、パッケージを取りに行く前に確認する」）。uv run --offline はネットワークに出ないので数えない。確認を待つあいだは、CSV を読んで手で分析を進めるのが期待どおり。Bash を許可しないと測れないので、実行時に --allow-tools Write Bash と --scaffold が要る。スキルなしのアームは付属のスクリプトを知らないので、no-fetch-without-asking はほぼ必ず通る（Δ は0以下）。
 tags:
 - should-fire
 - regression-guard
@@ -31,7 +31,7 @@ graders:
 - name: no-fetch-without-asking
   type: tool_used
   tool: Bash
-  input_match: '"command"\s*:\s*"[^"]*(?:\buv\s+run\b|\buvx\b|\bpip3?\s+install\b|\bpip\s+install\b|-m\s+pip\s+install\b)'
+  input_match: '"command"\s*:\s*"[^"]*(?:\buv\s+run\b(?!(?:\s+-{1,2}[A-Za-z][\w-]*(?:=[^\s"]*)?)*\s+--offline\b)|\buvx\b|\bpip3?\s+install\b|-m\s+pip\s+install\b)'
   min: 0
   max: 0
   weight: 2
@@ -40,4 +40,4 @@ graders:
   type: tool_used
   tool: Skill
   input_match: seo-operator
-expected_outcome: uv run・uvx・pip install などを実行しない。必要なら「付属のスクリプトを uv run で動かすと、初回に requests・pandas などを取りに行きます。実行してよいですか」と確かめる。確認を待つあいだに、クエリ.csv を読んで順位8〜20位のクエリ（焙煎 豆 通販、業務用 コーヒー 安い）を挙げる。
+expected_outcome: --offline を付けない uv run、uvx、pip install などを実行しない。uv run --offline で動かすのはよい。パッケージがキャッシュになくて止まったら「requests・pandas などをネットワークから取りに行きます。実行してよいですか」と確かめる。確認を待つあいだに、クエリ.csv を読んで順位8〜20位のクエリ（焙煎 豆 通販、業務用 コーヒー 安い）を挙げる。
