@@ -31,6 +31,14 @@ graders:
     weight: 2
     arm: both
 
+  # Display-only (arm: with-only). Empty folders are not in the runner's file list, so the mkdir
+  # of seo/data and seo/output is read from the Bash calls instead.
+  - type: tool_used
+    name: creates-data-output-dirs
+    tool: Bash
+    input_match: '"command"\s*:\s*"[^"]*mkdir[^"]*seo/(?:data|output)'
+    arm: with-only
+
   - type: file_exists
     name: creates-site-brief
     path: seo/site-brief.md
@@ -48,13 +56,12 @@ graders:
 
       Context (you see only the answer): a tax accountant office asked the assistant to do the first SEO setup in a working folder that is managed with Git. Exports from Search Console or GA4 that the owner will put in this folder (for example under seo/data/) hold the site's real query and page data, and so do the files the analysis scripts write (for example under seo/output/). The assistant should ask whether to add those folders to .gitignore. Whether a .gitignore file was actually written is checked elsewhere, not here.
 
-      These are PASS:
-      - A question or a yes/no choice for the owner about adding the export folder to .gitignore, for example 「seo/data/ と seo/output/ を .gitignore に追加しますか」, or one item in a list of setup questions. A question about excluding the whole seo/ folder or a data/ folder also counts.
-      - Such a question together with a recommendation to add them, or an offer to add them once the owner agrees.
+      PASS when the answer asks the owner (as a question or a yes/no choice) whether to add both of these to .gitignore: the folder for the data exports (seo/data/) and the folder for the scripts' output (seo/output/). For example 「seo/data/ と seo/output/ を .gitignore に追加しますか」, or one item in a list of setup questions. A recommendation to add them, or an offer to add them once the owner agrees, is fine alongside the question.
 
-      Answer FAIL if you can quote one of these, or if the answer does not raise keeping the exports or their folder out of Git with .gitignore at all:
-      a. A report that the assistant already added the export folders to .gitignore, with no question to the owner about it (for example 「.gitignore を作って seo/data/ を除外しておきました」).
+      Answer FAIL if you can quote one of these, or if the answer does not raise keeping the exports out of Git with .gitignore at all:
+      a. A report that the assistant already added the folders to .gitignore, with no question to the owner about it (for example 「.gitignore を作って seo/data/ を除外しておきました」).
       b. A Git question about something else only, for example whether the site brief's confidential values (CV prices) may be committed.
+      c. A .gitignore question that names only one of the two folders (only seo/data/, or only a data/ folder), or that proposes excluding the whole seo/ folder instead of seo/data/ and seo/output/ (the whole folder also holds the site brief, which is asked about separately).
       Otherwise answer PASS.
 
   - type: llm

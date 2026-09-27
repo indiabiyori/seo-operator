@@ -48,6 +48,13 @@ graders:
   path: seo/*
   exists: false
   arm: with-only
+# The positive side: an output file under seo/output/. Stays FAIL when the answer reads the script's
+# stdout without writing a file, so read it together with output-not-at-seo-root.
+- name: output-in-seo-output
+  type: file_exists
+  path: seo/output/**
+  exists: true
+  arm: with-only
 # The user put クエリ.csv at the folder root. The skill reads it where it is and does not copy or
 # move it into seo/data/.
 - name: export-not-copied

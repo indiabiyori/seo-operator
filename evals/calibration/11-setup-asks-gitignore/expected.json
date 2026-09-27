@@ -7,6 +7,10 @@
   "asks-gitignore": "FAIL",
   "starts-setup": "PASS"
  },
+ "data_only": {
+  "asks-gitignore": "FAIL",
+  "starts-setup": "PASS"
+ },
  "good_combined_git": {
   "asks-gitignore": "PASS",
   "starts-setup": "PASS"
@@ -20,11 +24,11 @@
   "starts-setup": "FAIL"
  },
  "trial_v120_without": {
-  "asks-gitignore": "PASS",
+  "asks-gitignore": "FAIL",
   "starts-setup": "PASS"
  },
  "whole_seo_folder": {
-  "asks-gitignore": "PASS",
+  "asks-gitignore": "FAIL",
   "starts-setup": "PASS"
  }
 }
