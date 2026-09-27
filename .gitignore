@@ -2,7 +2,7 @@ __pycache__/
 *.pyc
 .DS_Store
 .venv/
-# スキルの出力先。リポジトリの中で試したときに、実サイトのデータを公開しないため
+# スキルの作業フォルダ（site-brief など、seo/data のエクスポート、seo/output の出力）。リポジトリの中で試したときに、実サイトのデータを公開しないため
 seo/
 tests/audit/out/
 tests/gsc/data/

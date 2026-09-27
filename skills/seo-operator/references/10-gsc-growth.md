@@ -51,17 +51,19 @@ Search Console のエクスポートと付属スクリプトで、順位8〜20�
 
 ### 手順2 スクリプトを実行する
 
-先に `python3 <スキルのディレクトリ>/scripts/<名前>.py --help` で引数を確認する。以下は作業フォルダで実行する例。ZIP を展開した CSV を `seo/data/` に置き、出力は `seo/` に書く（スキルのフォルダには書かない）。
+先に `python3 <スキルのディレクトリ>/scripts/<名前>.py --help` で引数を確認する。以下は作業フォルダで実行する例で、ZIP を展開した CSV をユーザーに `seo/data/` に置いてもらった場合のパスにしている。作業フォルダの直下など別の場所にあるときは、そのパスをそのまま渡す（移動もコピーもしない）。出力は `seo/output/` に書く（スキルのフォルダには書かない）。スクリプトは出力先のフォルダを作らないので、先に作る。Search Console の ZIP は、期間やフィルタを変えても中のファイル名が同じ（`クエリ.csv`、`ページ.csv` など）なので、2つ以上の CSV を同じ `seo/data/` に置くと上書きされる。そのときは、期間やフィルタがわかる名前に変えてから置いてもらう（下の decay.py の例）。1つだけなら名前はそのままでよい。
 
 ```bash
+mkdir -p seo/output
+
 # 順位8〜20位で表示回数100以上（既定値）のクエリ。ブランド名クエリを除く
-python3 <スキルのディレクトリ>/scripts/striking_distance.py seo/data/クエリ.csv -o seo/striking.csv --exclude-regex "ブランド名|brand"
+python3 <スキルのディレクトリ>/scripts/striking_distance.py seo/data/クエリ.csv -o seo/output/striking.csv --exclude-regex "ブランド名|brand"
 
 # 平均掲載順位5位以内で、同じ CSV の同じ順位帯の実績CTRの半分に届かないページ
-python3 <スキルのディレクトリ>/scripts/low_ctr.py seo/data/ページ.csv -o seo/low_ctr_pages.csv --max-pos 5
+python3 <スキルのディレクトリ>/scripts/low_ctr.py seo/data/ページ.csv -o seo/output/low_ctr_pages.csv --max-pos 5
 
 # 前年同期と比べてクリック数が30%以上（既定値）減ったページ
-python3 <スキルのディレクトリ>/scripts/decay.py --current seo/data/ページ_直近3か月.csv --previous seo/data/ページ_前年同期.csv -o seo/decay.csv
+python3 <スキルのディレクトリ>/scripts/decay.py --current seo/data/ページ_直近3か月.csv --previous seo/data/ページ_前年同期.csv -o seo/output/decay.csv
 ```
 
 - 3つとも、UI のエクスポート（ZIP を展開した CSV）と、API・Data Studio・スプレッドシート経由の CSV を読める。英語・日本語のどちらの列名の表記（ファイル名・列名は画面の言語や時期で変わることがある）、UTF-8 / cp932 / UTF-16、カンマ・タブ・セミコロン区切り、小数点がカンマの表記にも対応する。ZIP のまま渡すと、展開するよう表示して終了コード 2 で止まる。

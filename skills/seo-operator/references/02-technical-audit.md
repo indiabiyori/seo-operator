@@ -13,7 +13,7 @@
 | データ | 入手元（ツール → 画面 → 操作） | 必須/任意 | ないときの動き方 |
 |---|---|---|---|
 | audit.csv | `scripts/audit.py` をサイトマップに対して実行する（手順2） | 必須 | 実行できない環境なら、ユーザーの PC で実行して CSV をアップロードしてもらう。Screaming Frog の Internal タブ（HTML）のエクスポートでも代替できる |
-| audit.py の標準エラー出力（警告・注意とサマリー） | 実行時の画面出力を貼る。ファイルに残すなら末尾に `2> audit_log.txt` を付けて実行する | 必須 | CSV に出ない問題（無視された canonical など）と、robots.txt を取得できなかった理由（CSV の status は `BLOCKED:robots-unreachable` だけ）を見落とすので、再実行して取ってもらう。robots.txt の取得状況は robots.txt レポートでも確かめる |
+| audit.py の標準エラー出力（警告・注意とサマリー） | 実行時の画面出力を貼る。ファイルに残すなら末尾に `2> seo/output/audit_log.txt` を付けて実行する（`seo/output/` は先に作っておく。手順2の例） | 必須 | CSV に出ない問題（無視された canonical など）と、robots.txt を取得できなかった理由（CSV の status は `BLOCKED:robots-unreachable` だけ）を見落とすので、再実行して取ってもらう。robots.txt の取得状況は robots.txt レポートでも確かめる |
 | ページ インデックス登録レポート（理由別） | Search Console →「インデックス作成」→「ページ」（ページ インデックス登録レポート）→「ページがインデックスに登録されなかった理由」の行をクリック →「エクスポート」 | 必須 | 概要ページの理由名と件数だけでも貼ってもらう。URL 単位の判断は `[要追加: 理由別エクスポート]` として保留する |
 | robots.txt | ブラウザで `https://example.jp/robots.txt` を開いて全文を貼る。取得状況は Search Console の robots.txt レポート（「設定」の中。`https://search.google.com/search-console/settings/robots-txt`）。ドメイン プロパティか、パスを含まない URL プレフィックス プロパティでだけ使える | 必須 | Web 取得ツールが使える環境なら取得する。取れなければ robots.txt に関する判断を保留し、その旨を書く |
 | サイトマップの URL | robots.txt の `Sitemap:` 行、または Search Console →「サイトマップ」。RSS 2.0 / Atom のフィードも audit.py に渡せる | 必須 | サイトマップがないこと自体を課題に記録し、主要ページの URL を1行1件で書いたテキストファイルを audit.py に渡す |
@@ -31,7 +31,7 @@
    - Search Console のプロパティが URL プレフィックスの場合、http / https、www の有無で別プロパティになる。ドメイン プロパティがあればそちらを使う。
    - ページ数が 500 未満のサイトは、ヘルプでもこのレポートは必須ではないとされている。主要ページを「URL 検査」で1件ずつ確認するほうが早い。数万 URL 以上のサイトや、EC のファセットで URL が増えるサイトは、下の「大規模サイトの監査」も行う。
 2. audit.py を実行する。できないこと（JavaScript、表示速度、サイトマップにないページ）は下の「audit.py の限界」で補う。
-   - 例: `python3 <スキルのディレクトリ>/scripts/audit.py https://example.jp/sitemap.xml -o seo/audit.csv --limit 500 2> seo/audit_log.txt`（作業フォルダで実行し、出力は作業フォルダの `seo/` に書く。`seo/` がなければ先に作る。スキルのフォルダには書かない。使い方は `--help`）。
+   - 例: `mkdir -p seo/output && python3 <スキルのディレクトリ>/scripts/audit.py https://example.jp/sitemap.xml -o seo/output/audit.csv --limit 500 2> seo/output/audit_log.txt`（作業フォルダで実行し、出力は作業フォルダの `seo/output/` に書く。audit.py は出力先のフォルダを作らないので、先に作る。スキルのフォルダには書かない。使い方は `--help`）。
    - 初回は `--limit 500` 程度（1 以上）で傾向をつかみ、必要なら全件を取る。`--limit` はサイトマップの先頭から数え、取得しなかった URL（`BLOCKED:`・`SKIPPED:`）も1件に数えるので、サイトマップの並び（カテゴリ順・更新日順など）によって一部のページの型に偏る。傾向を見るなら、サイトマップ インデックスの子サイトマップを1本ずつ指定し、それぞれ `--limit` で実行する（`-o` は上書きされるので、子サイトマップごとに別のファイルにする）。`--delay` はデフォルト 1.0 秒（0〜3600 秒）で、500 件なら待ち時間だけで 500 秒以上かかる。共用サーバーや他社サイトでは短くしない。`--timeout` はデフォルト 15 秒（0 より大きく 3600 秒以下）。範囲外の値や、`-o` にフォルダ・入力のサイトマップと同じファイルを指定した場合、引数のサイトマップの URL にユーザー名・パスワードが含まれる場合は、理由を表示して終了コード 2 で止まる。
    - 429 / 503 が返ると、Retry-After（秒数か HTTP 日付）があればそれに従って待ち（上限 120 秒）、なければ続いた回数に応じて間隔を `--delay` の2倍ずつ延ばす（上限 60 秒）。429 / 503 を返した URL は取り直さない。5回続くと、サーバーが制限していると判断してクロールを中断し、終了コード 3 で終わる。ページの取得中なら書き込み済みの行は残り、未取得の件数がサマリーに出る（サイトマップの収集中なら CSV は書き出さない）。この場合は `--delay` を短くして再実行せず、時間をおいて `--delay` を長くするか `--limit` で件数を絞って実行し直す。続くならサーバー・WAF の管理者に確認する。
    - 内部アドレスは既定で取得しない。ホスト名を DNS で解決し、プライベート・ループバック・リンクローカル・予約済み・マルチキャスト・未指定のアドレス（IPv4 / IPv6。IPv4 射影の IPv6 も）に当たれば、サイトマップ・子サイトマップ・ページ・robots.txt・リダイレクトのどの段でも取得せず、ページの行は `BLOCKED:private-address` になる（最初のサイトマップが当たれば終了コード 2。子サイトマップが当たれば、その中のページは CSV に出ない）。`--allow-private` は、社内ネットワークにあるステージングの監査とローカルでのテストのときだけ付ける。
@@ -153,7 +153,8 @@ audit.csv の列名は `scripts/audit.py` の仕様どおり。True / False は�
 ```python
 import pandas as pd
 
-df = pd.read_csv("seo/audit.csv", encoding="utf-8-sig", dtype=str, keep_default_na=False)
+# アップロードなどで受け取った audit.csv なら、そのファイルのパスにする
+df = pd.read_csv("seo/output/audit.csv", encoding="utf-8-sig", dtype=str, keep_default_na=False)
 # 無害化で先頭に付いた ' を外す（--no-sanitize で取った CSV なら不要）
 for c in ["url", "redirect_to", "title", "desc", "canonical"]:
     df[c] = df[c].str.replace(r"^'(?=[=+\-@\t\r])", "", regex=True)

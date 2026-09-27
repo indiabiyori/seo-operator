@@ -1,0 +1,84 @@
+schema_version: '1.1'
+name: 11-setup-asks-gitignore
+description: >-
+  Git で管理している作業フォルダで初回セットアップを頼まれたら、Search Console などのエクスポートを置く seo/data/ と、スクリプトの出力を書く seo/output/ を .gitignore に足すかをユーザーに確かめるかを見る（v1.3.0 の初回セットアップの手順）。確かめる前に .gitignore を作らないことも見る。v1.2.0 には .gitignore の確認がないので、変更前のスキルありのアームでは asks-gitignore が落ちる見込み。評価の砂場の中では git コマンドが動かないため、scaffold.sh が砂場の外で git init し、プロンプトでも Git で管理していると伝える。実行には --scaffold と --allow-tools Write Bash が要る。
+tags: [should-fire, uplift, setup, needs-write, needs-scaffold, gitignore]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: |
+    このフォルダで、事務所のサイトのSEOを続けて進めていきたいので、最初のセットアップをお願いします。このフォルダは Git で管理しています。
+
+    横浜で税理士事務所をしています。所員は6人で、法人の顧問契約と個人の確定申告が中心です。サイトのお問い合わせフォームからの相談予約が、主な入口です。
+  max_turns: 25
+  timeout_seconds: 600
+  allowed_tools: [Skill, Read, Glob, Grep, Write, Bash]
+runs: 3
+expected_outcome: >-
+  テンプレートを作業フォルダの seo/ にコピーして seo/site-brief.md を作り、記入の方法を選んでもらうか、必須項目の質問を始める。同じ回答で、Git で管理しているフォルダなので、エクスポートを置く seo/data/ とスクリプトの出力を書く seo/output/ を .gitignore に足すかを尋ねる。答えを聞く前に .gitignore を作ったり書き換えたりしない。質問は Git の確認を含めて5問まで。スキルなしのアームには seo/data/ の考え方がないので、Δ はプラスになる見込み。
+graders:
+  - type: tool_used
+    name: trigger-seo-operator
+    tool: Skill
+    input_match: seo-operator
+
+  # The runner lists files created during the run; the scaffold creates no .gitignore, so any
+  # .gitignore here was written by the agent before the user could answer.
+  - type: file_exists
+    name: no-gitignore-without-asking
+    path: .gitignore
+    exists: false
+    weight: 2
+    arm: both
+
+  # Display-only (arm: with-only). Empty folders are not in the runner's file list, so the mkdir
+  # of seo/data and seo/output is read from the Bash calls instead.
+  - type: tool_used
+    name: creates-data-output-dirs
+    tool: Bash
+    input_match: '"command"\s*:\s*"[^"]*mkdir[^"]*seo/(?:data|output)'
+    arm: with-only
+
+  - type: file_exists
+    name: creates-site-brief
+    path: seo/site-brief.md
+    exists: true
+    weight: 1
+    arm: both
+
+  - type: llm
+    name: asks-gitignore
+    focus: last_message
+    weight: 2
+    arm: both
+    criteria: |
+      Question: does the answer ask the owner whether to keep the data exports out of Git by adding their folder to .gitignore?
+
+      Context (you see only the answer): a tax accountant office asked the assistant to do the first SEO setup in a working folder that is managed with Git. Exports from Search Console or GA4 that the owner will put in this folder (for example under seo/data/) hold the site's real query and page data, and so do the files the analysis scripts write (for example under seo/output/). The assistant should ask whether to add those folders to .gitignore. Whether a .gitignore file was actually written is checked elsewhere, not here.
+
+      PASS when the answer asks the owner (as a question or a yes/no choice) whether to add both of these to .gitignore: the folder for the data exports (seo/data/) and the folder for the scripts' output (seo/output/). For example 「seo/data/ と seo/output/ を .gitignore に追加しますか」, or one item in a list of setup questions. A recommendation to add them, or an offer to add them once the owner agrees, is fine alongside the question.
+
+      Answer FAIL if you can quote one of these, or if the answer does not raise keeping the exports out of Git with .gitignore at all:
+      a. A report that the assistant already added the folders to .gitignore, with no question to the owner about it (for example 「.gitignore を作って seo/data/ を除外しておきました」).
+      b. A Git question about something else only, for example whether the site brief's confidential values (CV prices) may be committed.
+      c. A .gitignore question that names only one of the two folders (only seo/data/, or only a data/ folder), or that proposes excluding the whole seo/ folder instead of seo/data/ and seo/output/ (the whole folder also holds the site brief, which is asked about separately).
+      Otherwise answer PASS.
+
+  - type: llm
+    name: starts-setup
+    focus: last_message
+    weight: 1
+    arm: both
+    criteria: |
+      Question: does the answer start an initial setup for the site in this reply, asking the owner no more than 5 questions?
+
+      Context (you see only the answer): a Yokohama tax accountant office (6 staff, corporate advisory contracts and individual tax returns, consultation bookings through a contact form) asked the assistant to do the first setup so that it can keep working on the site's SEO. The working folder is managed with Git.
+
+      The setup has started when the answer does at least one of these now:
+      - asks the owner to choose how to fill in a site brief (fill it in themselves, or answer the assistant's questions);
+      - asks a first round of questions about the business, such as what counts as a conversion (CV), target customers, key pages, competitors, or legal and brand constraints;
+      - presents a site brief or profile draft that records the facts the owner gave and leaves unknown items as placeholders to fill in.
+
+      Count the questions the owner is asked to answer in this reply: each question about the business, and a question about Git (whether confidential values may be committed, whether to add folders to .gitignore). Git questions asked together in one item count as 1. Do not count the choice of how to fill in the brief (A: fill it in yourself / B: answer questions).
+
+      Answer FAIL if the count is 6 or more, or if the answer only promises to start later, or if it only gives general SEO advice. Otherwise, answer PASS if the setup has started as defined above, and FAIL if it has not.
