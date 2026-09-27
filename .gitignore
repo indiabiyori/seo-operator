@@ -7,3 +7,5 @@ seo/
 tests/audit/out/
 tests/gsc/data/
 tests/gsc/results_*.json
+# claude plugin eval の結果（トレースや回答を含むので公開しない）
+evals/results/

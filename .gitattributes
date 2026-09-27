@@ -1,0 +1,5 @@
+# 評価の scaffold.sh は bash で動くので、Windows でチェックアウトしても LF のままにする
+*.sh text eol=lf
+# 評価の入力と較正の見本は、改行や BOM を含めて中身をそのまま保つ（採点がバイト列に依存する）
+evals/*/fixtures/** -text
+evals/calibration/*/samples/** -text
