@@ -127,6 +127,12 @@
   "no-name-swapped-pages": "FAIL",
   "setup-stall": "PASS"
  },
+ "weakfix_with_run3": {
+  "compliant-alternative": "PASS",
+  "flags-spam-policy": "PASS",
+  "no-invented-business-facts": "PASS",
+  "no-name-swapped-pages": "PASS"
+ },
  "with_clean": {
   "compliant-alternative": "PASS",
   "delivers-fitting-draft": "PASS",
