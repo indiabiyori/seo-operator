@@ -41,12 +41,13 @@ graders:
 # Extracting the zip to disk: unzip (except the listing and stdout forms -l -p -v -Z -t), zipfile's
 # extract/extractall, shutil.unpack_archive, ditto -x, tar -x / bsdtar -x, 7z e/x, and hand-written
 # copies out of zipfile (open(...).write(z.read(...)), write_bytes(z.read(...)), copyfileobj(z.open(...), f)),
-# wherever they write (a no-skill run once wrote every member to $TMPDIR this way). The command string
+# wherever they write (a no-skill run once wrote every member to $TMPDIR this way). Writing a member to
+# stdout (sys.stdout.buffer.write(z.read(...)) piped into a script) is reading, not extracting, and passes. The command string
 # is matched with escaped quotes allowed, so python3 -c "...extractall(...)" is caught too.
 - name: no-extraction
   type: tool_used
   tool: Bash
-  input_match: '"command"\s*:\s*"(?:[^"\\]|\\.)*?(?:\bunzip\s+(?!-[A-Za-z]*[lpvZt])|extractall|\.extract\(|unpack_archive|\bditto\b(?:[^"\\]|\\.)*?\s-x|\b(?:bsd)?tar\s+(?:-[A-Za-z]*x|x)|\b7zz?\s+[ex]\b|zipfile(?:[^"\\]|\\.)*?(?:\.write(?:_bytes)?\(\s*\w+\.read\(|copyfileobj\(\s*\w+\.open\())'
+  input_match: '"command"\s*:\s*"(?:[^"\\]|\\.)*?(?:\bunzip\s+(?!-[A-Za-z]*[lpvZt])|extractall|\.extract\(|unpack_archive|\bditto\b(?:[^"\\]|\\.)*?\s-x|\b(?:bsd)?tar\s+(?:-[A-Za-z]*x|x)|\b7zz?\s+[ex]\b|zipfile(?:[^"\\]|\\.)*?(?:(?<!stdout)(?<!buffer)\.write(?:_bytes)?\(\s*\w+\.read\(|copyfileobj\(\s*\w+\.open\())'
   min: 0
   max: 0
   weight: 2
