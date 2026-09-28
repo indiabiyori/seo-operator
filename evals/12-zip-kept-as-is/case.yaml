@@ -39,12 +39,14 @@ graders:
   arm: both
   pattern: ^(?:(?=[\s\S]*dining-table)(?=[\s\S]*wood-care)|(?=[\s\S]*dining-table)(?=[\s\S]*kids-chair)|(?=[\s\S]*wood-care)(?=[\s\S]*kids-chair))
 # Extracting the zip to disk: unzip (except the listing and stdout forms -l -p -v -Z -t), zipfile's
-# extract/extractall, shutil.unpack_archive, ditto -x, tar -x / bsdtar -x, 7z e/x. The command string
+# extract/extractall, shutil.unpack_archive, ditto -x, tar -x / bsdtar -x, 7z e/x, and hand-written
+# copies out of zipfile (open(...).write(z.read(...)), write_bytes(z.read(...)), copyfileobj(z.open(...), f)),
+# wherever they write (a no-skill run once wrote every member to $TMPDIR this way). The command string
 # is matched with escaped quotes allowed, so python3 -c "...extractall(...)" is caught too.
 - name: no-extraction
   type: tool_used
   tool: Bash
-  input_match: '"command"\s*:\s*"(?:[^"\\]|\\.)*?(?:\bunzip\s+(?!-[A-Za-z]*[lpvZt])|extractall|\.extract\(|unpack_archive|\bditto\b(?:[^"\\]|\\.)*?\s-x|\b(?:bsd)?tar\s+(?:-[A-Za-z]*x|x)|\b7zz?\s+[ex]\b)'
+  input_match: '"command"\s*:\s*"(?:[^"\\]|\\.)*?(?:\bunzip\s+(?!-[A-Za-z]*[lpvZt])|extractall|\.extract\(|unpack_archive|\bditto\b(?:[^"\\]|\\.)*?\s-x|\b(?:bsd)?tar\s+(?:-[A-Za-z]*x|x)|\b7zz?\s+[ex]\b|zipfile(?:[^"\\]|\\.)*?(?:\.write(?:_bytes)?\(\s*\w+\.read\(|copyfileobj\(\s*\w+\.open\())'
   min: 0
   max: 0
   weight: 2
@@ -53,11 +55,12 @@ graders:
   type: tool_used
   tool: Skill
   input_match: seo-operator
-# Display-only (arm: with-only): the bundled script got the zip itself with --key page.
+# Display-only (arm: with-only): the bundled script got the zip itself with --key page. The zip path is
+# often held in a shell variable (Z=seo/data/....zip; low_ctr.py $Z --key page), so .zip may come first.
 - name: zip-to-script-with-key-page
   type: tool_used
   tool: Bash
-  input_match: '"command"\s*:\s*"(?:[^"\\]|\\.)*?low_ctr\.py(?:[^"\\]|\\.)*?(?:\.zip(?:[^"\\]|\\.)*?--key[\s=]+page|--key[\s=]+page(?:[^"\\]|\\.)*?\.zip)'
+  input_match: '"command"\s*:\s*"(?=(?:[^"\\]|\\.)*?\.zip)(?=(?:[^"\\]|\\.)*?low_ctr\.py(?:[^"\\]|\\.)*?--key[\s=]+page)'
   arm: with-only
 # Display-only: no extracted page table anywhere in the working folder (the runner lists files
 # created during the run). Scored through no-extraction instead, so one extraction is not counted twice.
