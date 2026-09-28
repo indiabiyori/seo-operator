@@ -68,6 +68,8 @@ git を使わない場合は、GitHub のリポジトリのページで Code →
 2. Settings → Capabilities で「Code execution and file creation」を有効にする（Team・Enterprise プランでは組織の設定で管理者が有効にする）
 3. Customize → Skills の「+」→「+ Create skill」→「Upload a skill」で zip を選ぶ
 
+Cowork で使うときは、Claude のデスクトップアプリで、サイトごとの作業フォルダを接続してから頼んでください。接続したフォルダには Claude が読み書きできるので、初回セットアップで作る `seo/site-brief.md` や、`seo/data/`・`seo/output/` がそのフォルダに残ります。フォルダを接続しないと、Claude が作ったファイルは会話の中に置かれ、手元に残すにはダウンロードが要ります。手元のフォルダに届くのは、デスクトップアプリで始めたタスクだけで、アプリを開いている間に限られます。Web やスマートフォンから始めたタスクからは届きません。
+
 ネットワークが制限された環境では、サイト監査用の `audit.py` が対象のサイトに接続できないことがあります。その場合は、手元の PC の Claude Code で監査を頼み、出力された CSV を claude.ai に渡してください。
 
 ### スクリプト用の Python

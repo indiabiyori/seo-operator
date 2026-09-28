@@ -44,6 +44,8 @@ cp -R seo-operator/skills/seo-operator ~/.claude/skills/
 
 On claude.ai (web or Cowork), zip the `skills/seo-operator` folder so that `seo-operator` is at the top of the zip, turn on "Code execution and file creation" in Settings → Capabilities, and upload the zip in Customize → Skills → "+" → "+ Create skill" → "Upload a skill".
 
+When you use the skill in Cowork, connect a working folder for the site in the Claude desktop app before you ask. Claude can read and write files in a connected folder, so `seo/site-brief.md`, `seo/data/`, and `seo/output/` from the initial setup stay there. Without a connected folder, the files Claude creates stay in the conversation, and you download the ones you want to keep. Local folders are reachable only from tasks started in the desktop app, and only while the app is open; tasks started on the web or on a phone cannot reach them.
+
 The scripts need Python 3.9 or later with requests, beautifulsoup4, and pandas. With [uv](https://docs.astral.sh/uv/), running a script with `uv run` installs them automatically from the metadata at the top of each script. When the packages are not on your machine yet, Claude asks before downloading them. Otherwise, create a virtual environment and run `pip install -r skills/seo-operator/requirements.txt` in it; Homebrew and many Linux system Pythons refuse a system-wide `pip install`. If a package is missing, the script prints how to install it.
 
 To update a plugin install, run `claude plugin marketplace update seo-operator` and `claude plugin update seo-operator@seo-operator`, then restart Claude Code.
