@@ -13,14 +13,14 @@
 このフォルダ（`tests/`）で実行する。
 
 ```bash
-python3 smoke/check_gsc.py      # 手早い確認。6件・数秒
+python3 smoke/check_gsc.py      # 手早い確認。8件・数秒
 python3 smoke/check_nodeps.py   # パッケージがない環境での挙動。14件・数秒
-python3 gsc/run_tests.py        # GSC 系3本の全テスト。137件・30秒ほど
+python3 gsc/run_tests.py        # GSC 系3本の全テスト。184件・40秒ほど
 python3 audit/verify_audit.py   # audit.py の全テスト。43件・1分ほど
 python3 meta/check_repo.py      # リポジトリの整合（manifest・版・依存の範囲・鉄則の写し・相対リンク）。12件・数秒
 ```
 
-最後の行が `6/6 passed`、`14/14 passed`、`合計 137 件、失敗 0 件`、`43/43 passed`、`11/11 passed` なら合格。audit.py のテストは 127.0.0.1 にテスト用のサーバーを立てるため、中で `--allow-private` を付けて実行している。
+最後の行が `8/8 passed`、`14/14 passed`、`合計 184 件、失敗 0 件`、`43/43 passed`、`12/12 passed` なら合格。audit.py のテストは 127.0.0.1 にテスト用のサーバーを立てるため、中で `--allow-private` を付けて実行している。
 
 ## パッケージがない環境の確認
 
@@ -78,4 +78,4 @@ python3 gsc/sync_common.py           # 正本の内容を3本に書き込む
 ## 未確認のこと
 
 - Windows では実行していない。audit.py のテストは POSIX のシグナル（Ctrl+C の中断の再現）と `openssl` を前提にしている部分がある。
-- 最後に全件合格を確かめた環境: macOS の Python 3.13.13 / pandas 3.0.6、Python 3.9.6 と 3.9.25 / pandas 2.3.3（すべて 2026-09-26）。3.9 の仮想環境は `uv venv --python 3.9` でも作れる。GitHub Actions では、main への push と pull request のたびに、Ubuntu の Python 3.9 と 3.13 で全件を回す。Python 3.9 では、requirements.txt の下限の版（`uv pip install --resolution lowest-direct`）でも回す。
+- 最後に全件合格を確かめた環境: macOS の Python 3.13.13 / pandas 3.0.6、Python 3.9.6 と 3.9.25 / pandas 2.3.3（すべて 2026-09-28）。3.9 の仮想環境は `uv venv --python 3.9` でも作れる。GitHub Actions では、main への push と pull request のたびに、Ubuntu の Python 3.9 と 3.13 で全件を回す。Python 3.9 では、requirements.txt の下限の版（`uv pip install --resolution lowest-direct`）でも回す。

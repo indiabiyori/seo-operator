@@ -1,7 +1,7 @@
 {
   "name": "seo-operator",
   "description": "日本語サイト向けの SEO スキル。手元にないデータは推測で埋めず、どのツールから何を取ってくるかを指示する",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "author": {
     "name": "indiabiyori"
   },

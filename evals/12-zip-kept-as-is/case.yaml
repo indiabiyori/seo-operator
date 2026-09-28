@@ -1,0 +1,77 @@
+schema_version: '1.1'
+name: 12-zip-kept-as-is
+description: >-
+  Search Console からダウンロードした ZIP（日本語 UI、中にクエリ.csv・ページ.csv など7つ）を、展開せずに seo/data/ に置いたと伝え、
+  順位のわりにクリックされていないページと、title と説明文を見直す順番を頼む。v1.4.0 の「ZIP は展開せずにスクリプトへ渡す。
+  ページ別の分析では --key page を付ける」を見る。ZIP を展開して CSV を書き出したら（unzip、extractall、tar -x など）no-extraction で落とす。
+  unzip -l・unzip -p や、python3 の zipfile でメモリの上で読むのはよい。ページの表を low_ctr.py で読むと、掲載順位5位以内で
+  dining-table（2.4位）・wood-care（3.5位）・kids-chair（4.8位）の3つが出る（--max-pos 10 なら oil-finish も）。クエリの表で回すと、
+  区間の行数が足りず1件も出ない。v1.3.0 は「ZIP は展開して中の CSV を置いてもらう」前提なので、展開するか、展開を頼んで止まると見込む。
+  Bash を許可しないと測れないので、実行時に --allow-tools Write Bash と --scaffold が要る。
+  店名「森ねずみ木工」と ZIP の中の数値は架空で、似た名前の実在の事業者とは関係がない。
+tags:
+- should-fire
+- uplift
+- needs-scaffold
+- needs-bash
+- gsc-zip
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: 無垢材の家具をネットで販売している「森ねずみ木工」でWeb担当をしています。Search Console の検索パフォーマンスから直近3か月分をエクスポートして、ダウンロードした ZIP をそのまま seo/data に置きました。検索順位のわりにクリックされていないページを洗い出して、title と説明文を見直す順番を決めてください。
+  max_turns: 25
+  timeout_seconds: 600
+  allowed_tools:
+  - Skill
+  - Read
+  - Glob
+  - Grep
+  - Bash
+runs: 3
+graders:
+# At least 2 of the 3 pages that low_ctr.py flags in the page table (position 5 or better).
+# The query table has no page URLs, so an answer built from it cannot pass.
+- name: names-low-ctr-pages
+  type: regex
+  target: last_message
+  match: contains
+  weight: 1
+  arm: both
+  pattern: ^(?:(?=[\s\S]*dining-table)(?=[\s\S]*wood-care)|(?=[\s\S]*dining-table)(?=[\s\S]*kids-chair)|(?=[\s\S]*wood-care)(?=[\s\S]*kids-chair))
+# Extracting the zip to disk: unzip (except the listing and stdout forms -l -p -v -Z -t), zipfile's
+# extract/extractall, shutil.unpack_archive, ditto -x, tar -x / bsdtar -x, 7z e/x, and hand-written
+# copies out of zipfile (open(...).write(z.read(...)), write_bytes(z.read(...)), copyfileobj(z.open(...), f)),
+# wherever they write (a no-skill run once wrote every member to $TMPDIR this way). Writing a member to
+# stdout (sys.stdout.buffer.write(z.read(...)) piped into a script) is reading, not extracting, and passes. The command string
+# is matched with escaped quotes allowed, so python3 -c "...extractall(...)" is caught too.
+- name: no-extraction
+  type: tool_used
+  tool: Bash
+  input_match: '"command"\s*:\s*"(?:[^"\\]|\\.)*?(?:\bunzip\s+(?!-[A-Za-z]*[lpvZt])|extractall|\.extract\(|unpack_archive|\bditto\b(?:[^"\\]|\\.)*?\s-x|\b(?:bsd)?tar\s+(?:-[A-Za-z]*x|x)|\b7zz?\s+[ex]\b|zipfile(?:[^"\\]|\\.)*?(?:(?<!stdout)(?<!buffer)\.write(?:_bytes)?\(\s*\w+\.read\(|copyfileobj\(\s*\w+\.open\())'
+  min: 0
+  max: 0
+  weight: 2
+  arm: both
+- name: trigger-seo-operator
+  type: tool_used
+  tool: Skill
+  input_match: seo-operator
+# Display-only (arm: with-only): the bundled script got the zip itself with --key page. The zip path is
+# often held in a shell variable (Z=seo/data/....zip; low_ctr.py $Z --key page), so .zip may come first.
+- name: zip-to-script-with-key-page
+  type: tool_used
+  tool: Bash
+  input_match: '"command"\s*:\s*"(?=(?:[^"\\]|\\.)*?\.zip)(?=(?:[^"\\]|\\.)*?low_ctr\.py(?:[^"\\]|\\.)*?--key[\s=]+page)'
+  arm: with-only
+# Display-only: no extracted page table anywhere in the working folder (the runner lists files
+# created during the run). Scored through no-extraction instead, so one extraction is not counted twice.
+- name: no-extracted-csv
+  type: file_exists
+  path: '**/ページ.csv'
+  exists: false
+  arm: with-only
+expected_outcome: >-
+  ZIP を展開せず、付属の low_ctr.py に ZIP のまま --key page（多くは --max-pos 5）を付けて渡す。スクリプトを使えないときも、
+  unzip -p や python3 の zipfile で中のページ.csv をメモリの上で読み、ディスクには書き出さない。掲載順位5位以内で CTR が低い
+  dining-table・wood-care・kids-chair を挙げ、見直す順番（lost_clicks の大きい順なら dining-table → wood-care → kids-chair）を示す。
+  title と説明文の変更案に、候補ページで絞り込んだ内訳のデータを求めるのはよい。

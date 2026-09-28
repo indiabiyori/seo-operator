@@ -14,9 +14,14 @@ low_ctr.py - 掲載順位のわりに CTR が低いクエリ（またはペー�
   CTR が低いクエリまたはページを抽出する。title・meta description の改善候補を選ぶために使う。
 
 入力:
-  Search Console のエクスポート CSV。UI からダウンロードした zip の中のクエリの表・ページの表
-  （クエリ.csv / Queries.csv、ページ.csv / Pages.csv という名前のことが多い）のほか、
-  Search Console API・Data Studio（旧 Looker Studio）・スプレッドシート経由の CSV も読める。
+  Search Console のエクスポート。画面からダウンロードした zip はそのまま渡せる（展開しなくてよい）。
+  zip の中から、--key に合わせてクエリの表（クエリ.csv / Queries.csv）かページの表（ページ.csv / Pages.csv）を
+  選んで読む。展開した CSV や、Search Console API・Data Studio（旧 Looker Studio）・スプレッドシート経由の CSV も読める。
+  - zip: 展開せずにメモリの上で読み、ディスクには書かない。zip かどうかは先頭のバイトで判定する（拡張子は見ない）。
+    表の名前は英字の大文字・小文字を区別せず、zip の中のフォルダも探す。UTF-8 のフラグがない名前
+    （macOS や Windows で圧縮し直した zip）も読む。--key auto はクエリの表を読み、クエリの表にデータ行がなく
+    ページの表があれば、ページの表を読む。次の zip は入力エラーにする: 該当する表がないか 2 つ以上ある、
+    パスワード付き、壊れている、無圧縮と Deflate 以外の圧縮方式、zip ファイルか表が（展開後に）100 MB を超える。
   - 文字コード: BOM があればそれに従う。なければ UTF-8 → cp932 の順に試す。BOM なしの UTF-16 も NUL バイトの
     位置で見分ける。UTF-8 として壊れたバイトが少しだけある場合は置き換えて読み、標準エラー出力に警告を出す。
   - 区切り文字: カンマ・タブ・セミコロンのうち、ヘッダー行で既知の列名が最も多く見つかるものを使う。
@@ -67,6 +72,7 @@ low_ctr.py - 掲載順位のわりに CTR が低いクエリ（またはペー�
   - サマリー（入力行数、除外行数、区間ごとの期待 CTR、該当件数、使った閾値、CTR の単位判定）は標準エラー出力に出す。
 
 使い方の例:
+  python3 low_ctr.py example.jp-Performance-on-Search-2026-09-27.zip --key page --max-pos 5 -o low_ctr_pages.csv   # zip のページの表
   python3 low_ctr.py Queries.csv -o low_ctr.csv
   python3 low_ctr.py クエリ.csv --exclude-regex "example|エグザンプル" --top 30 -o low_ctr.csv
   python3 low_ctr.py ページ.csv --max-pos 5 -o low_ctr_pages.csv   # 平均順位 5 位以内のページ（10-gsc-growth.md の手順）
@@ -81,13 +87,14 @@ low_ctr.py - 掲載順位のわりに CTR が低いクエリ（またはペー�
   - --benchmark の値は利用者が用意する。出典を確認できる値か、自サイトの過去の実績を使うこと。
   - Search Console の UI からのエクスポートは最大 1,000 行である。
   - 依存パッケージは pandas だけ（Python 3.9 以上、pandas 2.x / 3.x）。
-  - 終了コード: 0 = 正常終了（該当 0 件でも 0）、2 = 入力エラー（ファイルがない、必須列がない、引数が不正など）。
+  - 終了コード: 0 = 正常終了（該当 0 件でも 0）、2 = 入力エラー（ファイルがない、必須列がない、zip に使える表がない、引数が不正など）。
 """
 
 import argparse
 import bisect
 import codecs
 import csv
+import hashlib
 import io
 import math
 import os
@@ -97,6 +104,7 @@ import sys
 import textwrap
 import unicodedata
 import zipfile
+import zlib
 
 # パッケージがなくても --help を表示できるように、ここでは終了しない。確認は main() で parse_args の後に行う
 try:
@@ -162,6 +170,24 @@ COMMA_GROUPED_RE = re.compile(r"-?\d{1,3}(?:,\d{3})+")       # 1,234（件数の
 DECIMAL_COMMA_RE = re.compile(r"-?\d*,\d+")                  # 3,5（掲載順位・CTR の列では小数）
 DECIMAL_POINT_RE = re.compile(r"-?\d*\.\d+")                 # 3.5
 
+# Search Console の zip（「エクスポート」で CSV を選んだもの）を展開せずに読むための設定
+ZIP_MAGICS = (b"PK\x03\x04", b"PK\x05\x06")  # 通常の zip、空の zip
+ZIP_TABLES = (
+    ("query", "クエリの表", ("クエリ.csv", "Queries.csv")),
+    ("page", "ページの表", ("ページ.csv", "Pages.csv")),
+)
+ZIP_TABLE_LABELS = {key: label for key, label, _names in ZIP_TABLES}
+# 展開後の大きさの上限（1 つの表）。画面からのエクスポートは 1 表 1,000 行で、数百 KB にもならない。
+# 小さな zip が展開すると膨らむ場合（zip 爆弾）に、メモリを使い切らないための上限
+ZIP_MEMBER_LIMIT = 100 * 1024 * 1024
+# zip ファイル自体の大きさの上限。zipfile は開くときに中央ディレクトリ（中の名前の一覧）をすべて読むため、
+# 選んだ表の上限とは別に設ける。画面からのエクスポートの zip は数 KB〜数百 KB
+ZIP_FILE_LIMIT = 100 * 1024 * 1024
+ZIP_METHODS = (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
+# zip の読み込みで起きうる例外（壊れた zip、CRC の不一致、名前の文字コードの不整合など）
+ZIP_ERRORS = (zipfile.BadZipFile, zlib.error, EOFError, OSError, ValueError, OverflowError, NotImplementedError,
+              RuntimeError)
+
 
 class InputError(Exception):
     """入力エラー。main() で受け取り、終了コード 2 で終了する。"""
@@ -212,21 +238,210 @@ def normalize_header(name):
 
 
 def zip_message(path):
-    """zip（または .xlsx）が渡されたときのメッセージ。"""
-    names = []
+    """zip（または .xlsx）を受け付けない入力（low_ctr.py の --benchmark）に渡されたときのメッセージ。"""
+    return (f"zip ファイル（または Excel の .xlsx）は、この入力には使えません: {path}\n"
+            "  対処: CSV を指定してください。Excel で作った表は、CSV 形式で保存し直してください。")
+
+
+def input_file_error(path, error):
+    """入力ファイルを開けない・読めないときの入力エラー。"""
+    if isinstance(error, FileNotFoundError):
+        return InputError(f"ファイルが見つかりません: {path}\n  対処: パスとファイル名を確認してください。")
+    if isinstance(error, IsADirectoryError):
+        return InputError(f"ファイルではなくフォルダが指定されています: {path}")
+    return InputError(f"ファイルを読み込めません: {path}（{error}）")
+
+
+def read_bytes(path):
+    """ファイル全体をバイト列で読む。"""
     try:
-        with zipfile.ZipFile(path) as archive:
-            names = [n for n in archive.namelist() if n.lower().endswith(".csv")]
-    except (zipfile.BadZipFile, OSError):
-        pass
-    lines = [f"zip ファイル（または Excel の .xlsx）のようです: {path}"]
-    if names:
-        lines.append("  zip の中の CSV: " + ", ".join(names[:10]) + (" ほか" if len(names) > 10 else ""))
-    lines.append(
-        "  対処: Search Console からダウンロードした zip は展開し、中のクエリの表かページの表の CSV"
-        "（クエリ.csv / Queries.csv、ページ.csv / Pages.csv という名前のことが多い）を指定してください。"
-        "Excel 形式で保存したファイルは CSV で保存し直してください。")
-    return "\n".join(lines)
+        with open(path, "rb") as f:
+            return f.read()
+    except OSError as e:
+        raise input_file_error(path, e)
+
+
+def looks_like_zip(data):
+    return data[:4] in ZIP_MAGICS
+
+
+def escape_controls(text):
+    """改行などの制御文字を \\n や \\u202e の表記に置き換える（zip の中の名前で、表示の行を偽れないようにする）。"""
+    return "".join(
+        c.encode("unicode_escape").decode("ascii")
+        if unicodedata.category(c)[0] == "C" or unicodedata.category(c) in ("Zl", "Zp") else c
+        for c in text)
+
+
+def zip_member_names(info):
+    """zip の中のファイル名の候補を返す（先頭を表示に使う）。
+
+    UTF-8 のフラグがない名前を zipfile は cp437 として読むため、cp437 でバイト列に戻し、UTF-8 → cp932 の順に読み直す
+    （macOS で圧縮し直した zip は UTF-8 をフラグなしで、日本語版 Windows の古い圧縮機能は cp932 で書く）。
+    読めた候補はすべて残す。filename ではなく orig_filename を使う（Windows では filename の \\ が / に置き換わり、
+    cp932 の 2 バイト目の 0x5C が壊れるため）。
+    """
+    names = []
+    if not info.flag_bits & 0x800:
+        raw = info.orig_filename.encode("cp437")
+        for encoding in ("utf-8", "cp932"):
+            try:
+                names.append(raw.decode(encoding))
+            except UnicodeDecodeError:
+                pass
+        # Python 3.12 以降は、Unicode Path 拡張フィールド（0x7075）の名前が filename に入る
+        if info.filename.replace("\\", "/") != info.orig_filename.replace("\\", "/"):
+            names.insert(0, info.filename)
+    names.append(info.filename)
+    return list(dict.fromkeys(names))
+
+
+def zip_member_key(name):
+    """照合用に、フォルダを除いたファイル名を正規化する（NFKC で分解された濁点をまとめ、英字の大文字・小文字をそろえる）。"""
+    base = name.replace("\\", "/").rsplit("/", 1)[-1]
+    return unicodedata.normalize("NFKC", base).casefold()
+
+
+def is_zip_junk(name):
+    """フォルダ、macOS が付ける __MACOSX/ の中と ._ で始まるファイル、空の名前なら True。"""
+    parts = name.replace("\\", "/").split("/")
+    return name.endswith(("/", "\\")) or "__MACOSX" in parts or parts[-1].startswith("._") or not parts[-1]
+
+
+def format_mb(size):
+    """バイト数を MB（1,048,576 バイト）で小数第 1 位まで表す（上限と紛れないように切り上げる）。"""
+    tenths = -(-size * 10 // 1048576)
+    return f"{tenths // 10:,}.{tenths % 10} MB"
+
+
+def zip_broken(path, error, member=None):
+    """zip を読めないときの入力エラー（壊れている、途中で切れている、名前の文字コードが不正など）。"""
+    detail = f"{type(error).__name__}: {error}"
+    if member:
+        detail = f"{member}: {detail}"
+    return InputError(f"zip ファイルを読めません（壊れているか、ダウンロードが途中で止まった可能性があります）: {path}\n"
+                      f"  詳細: {escape_controls(detail)}\n"
+                      "  対処: Search Console からダウンロードし直してください。展開できる場合は、中の CSV を直接指定しても構いません。")
+
+
+def find_zip_tables(archive, path):
+    """zip の中のクエリの表とページの表を探す。
+
+    戻り値は ({"query": [(ZipInfo, 表示名), ...], "page": [...]}, zip の中の CSV の表示名のリスト)。
+    名前は、フォルダを除いた部分が ZIP_TABLES のどれかと一致するものを選ぶ（endswith は ._クエリ.csv も拾うので使わない）。
+    """
+    entries = []
+    for info in archive.infolist():
+        names = zip_member_names(info)
+        first = unicodedata.normalize("NFC", names[0])
+        entries.append((info, first, escape_controls(first), names))
+    shown = [first for _info, first, _display, _names in entries]
+    if "[Content_Types].xml" in shown and any(n.startswith("xl/") for n in shown):
+        raise InputError(f"Excel の .xlsx ファイルのようです: {path}\n"
+                         "  対処: Search Console の「エクスポート」では CSV を選んでください。"
+                         "Excel で作った表は、CSV 形式で保存し直してください。")
+    files = [entry for entry in entries if not is_zip_junk(entry[1])]
+    found = {}
+    for key, _label, wanted in ZIP_TABLES:
+        wanted_keys = {zip_member_key(w) for w in wanted}
+        found[key] = [(info, display) for info, _first, display, names in files
+                      if any(zip_member_key(n) in wanted_keys for n in names)]
+    csvs = [display for _info, first, display, _names in files if first.lower().endswith(".csv")]
+    return found, csvs
+
+
+def zip_not_found(path, key_option, found, csvs):
+    """--key に合う表が zip にないときの入力エラー。"""
+    order = ("query", "page") if key_option == "auto" else (key_option,)
+    wanted = ", ".join(name for key, _label, names in ZIP_TABLES if key in order for name in names)
+    listed = (", ".join(csvs[:10]) + (f" ほか {len(csvs) - 10} 件" if len(csvs) > 10 else "")) if csvs else "（なし）"
+    if key_option == "auto":
+        lines = [f"zip の中にクエリの表もページの表も見つかりません: {path}"]
+    else:
+        lines = [f"zip の中に{ZIP_TABLE_LABELS[key_option]}が見つかりません: {path}"]
+    lines.append(f"  探した名前: {wanted}（英字の大文字・小文字は区別しない。zip の中のフォルダも探す）")
+    lines.append(f"  zip の中の CSV: {listed}")
+    other = "page" if key_option == "query" else "query"
+    if key_option != "auto" and found[other]:
+        label = ZIP_TABLE_LABELS[other]
+        lines.append(f"  {label}（{found[other][0][1]}）はあります。{label}を使うなら --key {other} を指定してください。")
+    lines.append("  対処: Search Console の「検索パフォーマンス」→「エクスポート」で CSV を選んで書き出した zip を"
+                 "指定してください。画面の言語が日本語・英語以外の zip は、ファイル名も列名も訳されているため読めません。"
+                 "表示言語を日本語か英語にしてから書き出し直してください。名前を変えた CSV を入れた zip は、"
+                 "展開して中の CSV を直接指定してください。")
+    return InputError("\n".join(lines))
+
+
+def read_zip_table(archive, path, found, key, limit):
+    """zip の中の表を 1 つ読み、(テキスト, 文字コード名, 警告のリスト, 表示名) を返す。
+
+    同じ種類の表が 2 つ以上ある、パスワード付き、対応していない圧縮方式、展開後の大きさが上限を超えるものは
+    入力エラーにする。展開後の大きさは中央ディレクトリの申告で先に調べ、読む量も上限 + 1 バイトまでにする。
+    """
+    if len(found[key]) > 1:
+        raise InputError(f"zip の中に{ZIP_TABLE_LABELS[key]}が複数あります: {path}\n"
+                         "  候補: " + ", ".join(display for _info, display in found[key]) + "\n"
+                         "  対処: zip を展開して、使う CSV を直接指定してください。")
+    info, member = found[key][0]
+    source = f"{path} の中の {member}"
+    if info.flag_bits & 0x1:
+        raise InputError(f"パスワード付きの zip は読めません: {source}\n"
+                         "  対処: zip を展開して、中の CSV を直接指定してください。")
+    if info.compress_type not in ZIP_METHODS:
+        raise InputError(f"この zip の圧縮方式（番号 {info.compress_type}）には対応していません: {source}\n"
+                         "  対処: zip を展開して、中の CSV を直接指定してください"
+                         "（Search Console からダウンロードしたままの zip は読めます）。")
+    too_big = ("  対処: 画面からのエクスポートは 1 つの表が最大 1,000 行で、この大きさにはなりません。"
+               "API や BigQuery で取った大きなデータは、期間とキー（クエリ・URL）ごとに集計してから渡してください。"
+               "集計済みで大きいだけなら、zip を展開して CSV を直接指定してください。")
+    if info.file_size > limit:
+        raise InputError(f"zip の中の CSV が大きすぎます（展開後 {format_mb(info.file_size)}、"
+                         f"上限 {limit // 1048576} MB）: {source}\n" + too_big)
+    try:
+        with archive.open(info) as f:
+            data = f.read(limit + 1)
+    except ZIP_ERRORS as e:
+        raise zip_broken(path, e, member)
+    # zipfile は申告の大きさを超えて返さない（超えると CRC の不一致になる）。zipfile の実装が変わったときのために残す
+    if len(data) > limit:
+        raise InputError(f"zip の中の CSV が大きすぎます（展開後 {limit // 1048576} MB を超えています）: {source}\n"
+                         + too_big)
+    text, encoding, warnings = decode_text(data, source)
+    return text, encoding, warnings, source
+
+
+def read_zip_export(fileobj, path, key_option, limit=ZIP_MEMBER_LIMIT):
+    """Search Console の zip を展開せずに読み、--key に合う表を (テキスト, 文字コード名, 警告のリスト, 表示名) で返す。
+
+    --key query はクエリの表（クエリ.csv / Queries.csv）、page はページの表（ページ.csv / Pages.csv）を読み、
+    もう一方には切り替えない。auto はクエリの表を読む。ただし、クエリの表がヘッダー行だけ（列はそろっていて
+    データ行がない）で、ページの表があれば、ページの表を読む（ページで絞り込んだエクスポートでは、クエリの表が
+    ヘッダー行だけのことがある）。空のファイルや列の足りない表は切り替えず、そのまま入力エラーにする。
+    ディスクには何も書かない。
+    """
+    try:
+        archive = zipfile.ZipFile(fileobj)
+    except ZIP_ERRORS as e:
+        raise zip_broken(path, e)
+    with archive:
+        found, csvs = find_zip_tables(archive, path)
+        order = ("query", "page") if key_option == "auto" else (key_option,)
+        chosen = next((key for key in order if found[key]), None)
+        if chosen is None:
+            raise zip_not_found(path, key_option, found, csvs)
+        text, encoding, warnings, source = read_zip_table(archive, path, found, chosen, limit)
+        notes = []
+        if key_option == "auto" and chosen == "query" and found["page"]:
+            page_member = found["page"][0][1]
+            if not is_header_only(text, "query"):
+                notes.append(f"注意: zip にはページの表（{page_member}）もあります。--key auto ではクエリの表を使います。"
+                             "ページ別に見るなら --key page を付けてください。")
+            else:
+                query_member = found["query"][0][1]
+                text, encoding, warnings, source = read_zip_table(archive, path, found, "page", limit)
+                notes.append(f"注意: zip のクエリの表（{query_member}）にデータ行がないため、ページの表（{page_member}）を"
+                             "使います。ページで絞り込んだエクスポートでは、クエリの表が空のことがあります。")
+    return text, encoding, notes + warnings, source
 
 
 def guess_utf16_without_bom(data):
@@ -244,27 +459,15 @@ def guess_utf16_without_bom(data):
     return None
 
 
-def read_text(path):
-    """ファイルを読み、文字コードを判定して (テキスト, 文字コード名, 警告のリスト) を返す。
+def decode_text(data, source):
+    """バイト列の文字コードを判定して (テキスト, 文字コード名, 警告のリスト) を返す。source はメッセージに使う名前。
 
     BOM があればそれに従う（UTF-8 / UTF-16）。BOM がなければ NUL バイトの位置で BOM なしの UTF-16 を見分け、
     それ以外は UTF-8 → cp932 の順に試す。UTF-8 としてほぼ正しく、壊れたバイトが少しだけある場合は
     そのバイトを置き換えて読み、標準エラー出力に警告を出す（cp932 として読むと全体が文字化けするため）。
     """
-    try:
-        with open(path, "rb") as f:
-            data = f.read()
-    except FileNotFoundError:
-        raise InputError(f"ファイルが見つかりません: {path}\n  対処: パスとファイル名を確認してください。")
-    except IsADirectoryError:
-        raise InputError(f"ファイルではなくフォルダが指定されています: {path}")
-    except OSError as e:
-        raise InputError(f"ファイルを読み込めません: {path}（{e}）")
-    if data.startswith(b"PK\x03\x04"):
-        raise InputError(zip_message(path))
-
     undecodable = InputError(
-        f"文字コードを判定できません: {path}\n"
+        f"文字コードを判定できません: {source}\n"
         "  対処: UTF-8、cp932（Shift_JIS）、UTF-16 のいずれかで保存し直してください。")
     text = None
     encoding = None
@@ -317,6 +520,82 @@ def read_text(path):
         warnings.append(f"警告: NUL 文字が {text.count(chr(0))} 個あり、取り除いて読みました。")
         text = text.replace("\x00", "")
     return text, encoding, warnings
+
+
+def has_data_rows(text):
+    """ヘッダー行のほかに、空でない行が 1 行でもあれば True（区切り文字によらず、行の数だけを見る）。"""
+    seen = 0
+    try:
+        for record in csv.reader(io.StringIO(text, newline="")):
+            if any(cell.strip() for cell in record):
+                seen += 1
+                if seen > 1:
+                    return True
+    except csv.Error:
+        return True  # 形式の問題は、この後の parse_csv_text で知らせる
+    return False
+
+
+def is_header_only(text, field):
+    """ヘッダー行に field（query など）と必須の指標の列がそろい、データ行が 1 行もなければ True。"""
+    if has_data_rows(text):
+        return False
+    for delimiter, _name in DELIMITERS:
+        found, _conflicts = find_columns(first_record(text, delimiter))
+        if field in found and all(m in found for m in REQUIRED_METRICS):
+            return True
+    return False
+
+
+def zip_file_too_big(path, size=None):
+    """zip ファイル自体が上限を超えるときの入力エラー。size が None なら、読んだ量が上限を超えたことだけを示す。"""
+    shown = f"{format_mb(size)}、上限 {ZIP_FILE_LIMIT // 1048576} MB" if size is not None else (
+        f"上限 {ZIP_FILE_LIMIT // 1048576} MB を超えています")
+    return InputError(f"zip ファイルが大きすぎます（{shown}）: {path}\n"
+                      "  対処: Search Console の画面からエクスポートした zip は数 KB〜数百 KB です。"
+                      "ほかのファイルも入れて圧縮し直した zip なら、展開して使う CSV を直接指定してください。")
+
+
+def read_text(path):
+    """zip を受け付けない入力（low_ctr.py の --benchmark）のファイルを読み、(テキスト, 文字コード名, 警告のリスト) を返す。"""
+    data = read_bytes(path)
+    if looks_like_zip(data):
+        raise InputError(zip_message(path))
+    return decode_text(data, path)
+
+
+def read_export_text(path, key_option):
+    """Search Console のエクスポートを読み、(テキスト, 文字コード名, 警告のリスト, 表示名) を返す。
+
+    先頭の 4 バイトで zip かどうかを判定する（拡張子は見ない）。zip なら展開せずに、--key に合う表を読む。
+    zip はファイル全体をメモリに読まず、中央ディレクトリと選んだ表だけを読む（シークできない入力だけはメモリに読む）。
+    zip ファイル自体が ZIP_FILE_LIMIT を超えるときは、開く前に入力エラーにする。
+    表示名は、CSV ならパス、zip なら「x.zip の中の クエリ.csv」。
+    """
+    try:
+        f = open(path, "rb")
+    except OSError as e:
+        raise input_file_error(path, e)
+    with f:
+        try:
+            head = f.read(4)
+            is_zip = head in ZIP_MAGICS
+            size = data = None
+            if is_zip and f.seekable():
+                size = f.seek(0, os.SEEK_END)
+                f.seek(0)
+            elif is_zip:
+                data = head + f.read(ZIP_FILE_LIMIT + 1 - len(head))
+            else:
+                data = head + f.read()
+        except OSError as e:
+            raise input_file_error(path, e)
+        if is_zip:
+            if (size if data is None else len(data)) > ZIP_FILE_LIMIT:
+                raise zip_file_too_big(path, size)
+            return read_zip_export(f if data is None else io.BytesIO(data), path, key_option)
+    text, encoding, warnings = decode_text(data, path)
+    return text, encoding, warnings, path
 
 
 def first_record(text, delimiter):
@@ -455,10 +734,17 @@ def missing_columns_message(path, fields, header, either=False):
         lines.append(f"    {f}: " + ", ".join(ALIAS_MAP[f]))
     if period_labeled_columns(header):
         lines.append(comparison_hint())
-    lines.append(
-        "  対処: Search Console の「検索パフォーマンス」からエクスポートした CSV を使うか、"
-        "列名を上のいずれかに変えてください。"
-    )
+    found, _conflicts = find_columns(header)
+    if "impressions" in found and "clicks" not in found and "position" not in found:
+        lines.append(
+            "  対処: 表示回数だけの表は、生成 AI パフォーマンス レポートなど、「検索結果」以外のレポートの"
+            "エクスポートのようです。Search Console の「検索パフォーマンス」→「検索結果」からエクスポートし直してください。"
+        )
+    else:
+        lines.append(
+            "  対処: Search Console の「検索パフォーマンス」からエクスポートした CSV を使うか、"
+            "列名を上のいずれかに変えてください。"
+        )
     return "\n".join(lines)
 
 
@@ -635,24 +921,24 @@ def check_ctr_consistency(ctr, clicks, impressions):
 
 
 def load_gsc_csv(path, key_option, ctr_unit, zero_position="exclude"):
-    """GSC のエクスポート CSV を読み、列を正規化した DataFrame と読み込み情報を返す。
+    """GSC のエクスポート（CSV か Search Console の zip）を読み、列を正規化した DataFrame と読み込み情報を返す。
 
     掲載順位が 0（"0"、"0.0"、"0,0" などを解析した結果が 0）の値は「値なし」とみなす。
     zero_position="exclude" ではその行を除外し、"missing" では掲載順位を NaN にして行を残す。
     """
     if zero_position not in ZERO_POSITION_MODES:
         raise ValueError(f"zero_position: {zero_position!r}")
-    text, encoding, warnings = read_text(path)
-    header, rows, delimiter_name, n_blank = parse_csv_text(text, path)
+    text, encoding, warnings, source = read_export_text(path, key_option)
+    header, rows, delimiter_name, n_blank = parse_csv_text(text, source)
     found, conflicts = find_columns(header)
     ctr_conflict = conflicts.pop("ctr", None)
     for field in ("query", "page", "clicks", "impressions", "position"):
         if field in conflicts:
-            raise InputError(conflict_message(path, field, header, conflicts[field]))
-    key, other = resolve_key(found, key_option, path, header)
+            raise InputError(conflict_message(source, field, header, conflicts[field]))
+    key, other = resolve_key(found, key_option, source, header)
     missing = [f for f in REQUIRED_METRICS if f not in found]
     if missing:
-        raise InputError(missing_columns_message(path, missing, header))
+        raise InputError(missing_columns_message(source, missing, header))
     labeled = period_labeled_columns(header)
     if labeled:
         warnings.append("警告: 期間ラベル付きらしい列があります（" + ", ".join(f"'{c}'" for c in labeled[:4])
@@ -707,7 +993,9 @@ def load_gsc_csv(path, key_option, ctr_unit, zero_position="exclude"):
     n_zero_position = int((zero_position_rows & ~empty_key).sum())
     df = df[keep].reset_index(drop=True)
     info = {
-        "path": path,
+        "path": source,
+        # decay.py の「同じ内容」の判定に使う（zip は中の時刻が違っても、同じ表なら同じ値になる）
+        "content_sha256": hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest(),
         "encoding": encoding,
         "sep_name": delimiter_name,
         "n_input": int(len(rows)),
@@ -890,7 +1178,8 @@ def add_common_args(parser):
     parser.add_argument(
         "--key", choices=["auto", "query", "page"], default="auto",
         help="キー列。auto はクエリ列があればクエリ、なければページ（デフォルト: %(default)s）。"
-             "クエリ × ページの CSV では、キーにしなかった列も出力に残す")
+             "クエリ × ページの CSV では、キーにしなかった列も出力に残す。Search Console の zip では、"
+             "query はクエリの表、page はページの表を読む（auto はクエリの表。データ行がなければページの表）")
     parser.add_argument(
         "--ctr-unit", choices=["auto", "percent", "ratio"], default="auto",
         help="CTR 列の単位（デフォルト: %(default)s）。auto は数値だけの列をクリック数 / 表示回数と"
@@ -948,6 +1237,7 @@ lost_clicks = 表示回数 × (期待 CTR - CTR) は目安であり、予測で�
 
 EPILOG = """\
 使用例:
+  python3 low_ctr.py example.jp-Performance-on-Search-2026-09-27.zip --key page --max-pos 5 -o low_ctr_pages.csv   # zip のページの表
   python3 low_ctr.py Queries.csv -o low_ctr.csv
   python3 low_ctr.py クエリ.csv --exclude-regex "example|エグザンプル" --top 30 -o low_ctr.csv
   python3 low_ctr.py ページ.csv --max-pos 5 -o low_ctr_pages.csv   # 平均順位 5 位以内のページ（10-gsc-growth.md の手順）
@@ -962,6 +1252,8 @@ EPILOG = """\
   各行の掲載順位を四捨五入した整数で表を引く。範囲外は端の値、途中の抜けは前後の値の線形補間を使う。
 
 入力の注意:
+  - Search Console の zip はそのまま渡せる。--key に合わせて中のクエリ.csv / Queries.csv か
+    ページ.csv / Pages.csv を読む（auto はクエリの表。データ行がなければページの表）。
   - 列名は英語・日本語のどちらの表記にも対応（Top queries / 上位のクエリ、Top pages / 上位のページ、
     Clicks / クリック数、Impressions / 表示回数、CTR、Position / 掲載順位 など）。
   - 必須列: クエリ列またはページ列、クリック数、表示回数、掲載順位。CTR 列は任意。
@@ -996,8 +1288,9 @@ def build_parser():
         epilog=EPILOG,
         formatter_class=HelpFormatter,
     )
-    parser.add_argument("input", help="Search Console のエクスポート CSV（クエリの表かページの表。UI の zip の中の"
-                                      "クエリ.csv / Queries.csv、ページ.csv / Pages.csv という名前のことが多い）")
+    parser.add_argument("input", help="Search Console のエクスポート。ダウンロードした zip はそのまま渡せる"
+                                      "（--key に合わせて中のクエリ.csv / Queries.csv か、ページ.csv / Pages.csv を読む）。"
+                                      "展開した CSV や、API などで取った CSV も読める")
     parser.add_argument("--max-pos", type=float, default=10.0, metavar="順位",
                         help="掲載順位の上限。この値以下の行を対象にする（デフォルト: %(default)s。"
                              "references/10-gsc-growth.md の手順の「平均順位 5 位以内」で見るなら 5）")
@@ -1012,7 +1305,7 @@ def build_parser():
                         help="期待 CTR を計算するのに必要な、区間ごとの最低行数。"
                              "これ未満の区間は期待 CTR を空欄にし、その区間の行は抽出しない（デフォルト: %(default)s）")
     parser.add_argument("--benchmark", metavar="FILE",
-                        help="position,ctr の 2 列の CSV。指定すると自サイトの実績の代わりにこの値を期待 CTR に使う")
+                        help="position,ctr の 2 列の CSV（zip は使えない）。指定すると自サイトの実績の代わりにこの値を期待 CTR に使う")
     add_common_args(parser)
     return parser
 
